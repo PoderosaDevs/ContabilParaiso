@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -20,14 +20,11 @@ import {
   FormLabel,
   FormMessage,
 } from "@/components/ui/form";
-import { toast } from "sonner";
-import { Marketplace } from "@/types";
 
+// Schema rigoroso: titulo deve ser preenchido
 const formSchema = z.object({
-  name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
-  cnpj: z
-    .string()
-    .regex(/^\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}$/, "CNPJ inválido (formato: 00.000.000/0000-00)"),
+  // O .min(1) força que a string não seja vazia
+  titulo: z.string().min(1, "O título é obrigatório"),
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -35,8 +32,8 @@ type FormData = z.infer<typeof formSchema>;
 interface MarketplaceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (marketplace: Marketplace) => void;
-  marketplace?: Marketplace | null;
+  onSave: (data: { titulo: string }) => void; // Tipagem obrigatória
+  marketplace?: any | null;
 }
 
 export const MarketplaceModal = ({
@@ -49,84 +46,68 @@ export const MarketplaceModal = ({
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: {
-      name: marketplace?.name || "",
-      cnpj: marketplace?.cnpj || "",
-    },
+    defaultValues: { titulo: "" },
   });
 
-  const formatCNPJ = (value: string) => {
-    const numbers = value.replace(/\D/g, "");
-    return numbers
-      .replace(/^(\d{2})(\d)/, "$1.$2")
-      .replace(/^(\d{2})\.(\d{3})(\d)/, "$1.$2.$3")
-      .replace(/\.(\d{3})(\d)/, ".$1/$2")
-      .replace(/(\d{4})(\d)/, "$1-$2")
-      .slice(0, 18);
-  };
+  // Limpa ou preenche o form sempre que o modal abre ou muda o item editado
+  useEffect(() => {
+    if (open) {
+      form.reset({
+        titulo: marketplace?.titulo || "",
+      });
+    }
+  }, [open, marketplace, form]);
 
   const onSubmit = async (data: FormData) => {
     setIsLoading(true);
-    
-    const newMarketplace: Marketplace = {
-      id: marketplace?.id || `mp-${Date.now()}`,
-      name: data.name,
-      cnpj: data.cnpj,
-    };
-
-    onSave(newMarketplace);
-    toast.success(marketplace ? "Marketplace atualizado!" : "Marketplace criado!");
-    form.reset();
-    onOpenChange(false);
-    setIsLoading(false);
+    try {
+      // Usamos o "as" para garantir que o tipo enviado é o exigido pela interface
+      await onSave(data as { titulo: string });
+      onOpenChange(false);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[400px]">
         <DialogHeader>
-          <DialogTitle>{marketplace ? "Editar" : "Novo"} Marketplace</DialogTitle>
+          <DialogTitle>
+            {marketplace ? "Editar" : "Novo"} Marketplace
+          </DialogTitle>
           <DialogDescription>
-            {marketplace ? "Atualize os dados do marketplace" : "Preencha os dados para criar um novo marketplace"}
+            Digite o nome do canal de venda.
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
             <FormField
               control={form.control}
-              name="name"
+              name="titulo"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Nome</FormLabel>
+                  <FormLabel>Nome do Marketplace</FormLabel>
                   <FormControl>
-                    <Input placeholder="Nome do marketplace" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-            <FormField
-              control={form.control}
-              name="cnpj"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>CNPJ</FormLabel>
-                  <FormControl>
-                    <Input
-                      placeholder="00.000.000/0000-00"
-                      {...field}
-                      onChange={(e) => field.onChange(formatCNPJ(e.target.value))}
-                    />
+                    <Input placeholder="Ex: Mercado Livre" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
             />
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+              >
                 Cancelar
               </Button>
-              <Button type="submit" className="gradient-primary text-primary-foreground" disabled={isLoading}>
+              <Button
+                type="submit"
+                className="gradient-primary text-white"
+                disabled={isLoading}
+              >
                 {isLoading ? "Salvando..." : "Salvar"}
               </Button>
             </DialogFooter>

@@ -26,8 +26,8 @@ import { Badge } from "@/components/ui/badge";
 const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Marketplace", url: "/marketplace", icon: Store },
-  { title: "Vendas", url: "/vendas", icon: Receipt },
-  { title: "Repasses", url: "/repasses", icon: ArrowLeftRight },
+  { title: "Financeiro", url: "/financeiro", icon: Receipt },
+  { title: "Pagamentos", url: "/pagamentos", icon: ArrowLeftRight },
 ];
 
 const adminMenuItems = [

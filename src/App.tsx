@@ -54,7 +54,7 @@ const AppRoutes = () => (
     <Route path="/register" element={<PublicRoute><Register /></PublicRoute>} />
     <Route path="/" element={<ProtectedRoute><Index /></ProtectedRoute>} />
     <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
-    <Route path="/vendas" element={<ProtectedRoute><Vendas /></ProtectedRoute>} />
+    <Route path="/financeiro" element={<ProtectedRoute><Vendas /></ProtectedRoute>} />
     <Route path="/repasses" element={<ProtectedRoute><Repasses /></ProtectedRoute>} />
     <Route path="/solicitacoes" element={<ProtectedRoute adminOnly><Solicitacoes /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
