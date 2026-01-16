@@ -6,7 +6,7 @@ import React, {
   ReactNode,
 } from "react";
 import { User, RegistrationRequest, UserRole } from "@/types";
-import api from "@/services/api"; // Certifique-se de que este arquivo existe com a baseURL: 'http://localhost:3333'
+import api from "@/services/api";
 
 interface AuthContextType {
   user: User | null;
