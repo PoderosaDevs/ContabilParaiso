@@ -25,16 +25,10 @@ export interface Marketplace {
 
 export interface Venda {
   id: string;
-  numeroNf: string;
-  marketplaceId: string;
-  marketplace?: Marketplace;
-  dataVenda: Date;
+  nf: string;               // Renomeado de 'numeroNf' para alinhar com o modal
+  dataVenda: Date | string; // Aceita string (ISO) ou objeto Date
   baseIcms: number;
-  comissao: number;
-  comissaoFrete: number;
-  descontos: number;
-  valorLiquido: number;
-  status: "pendente" | "pago" | "cancelado";
+  loja: string;             // Novo campo obrigatório
 }
 
 export interface Repasse {

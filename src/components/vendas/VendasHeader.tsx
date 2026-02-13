@@ -3,8 +3,9 @@ import {
   ChevronDown, 
   Plus, 
   FileSpreadsheet, 
-  FileUp, 
-  UserPlus 
+  FileUp,
+  Filter,
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,118 +17,135 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface VendasHeaderProps {
+  // Busca e MKT
   search: string;
   onSearchChange: (value: string) => void;
   marketplaceFilter: string;
   onMarketplaceFilterChange: (value: string) => void;
   marketplaces: any[];
+  
+  // NOVOS FILTROS
+  statusFilter: string;
+  onStatusFilterChange: (value: string) => void;
+  startDate: string;
+  onStartDateChange: (value: string) => void;
+  endDate: string;
+  onEndDateChange: (value: string) => void;
+  onClearFilters: () => void;
+
+  // Ações
   onManualClick: () => void;
-  onImportExcel: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onImportClick: (type: 'venda' | 'pagamento') => void;
 }
 
 export const VendasHeader = ({ 
-  search, 
-  onSearchChange, 
-  marketplaceFilter, 
-  onMarketplaceFilterChange, 
-  marketplaces, 
-  onManualClick, 
-  onImportExcel 
+  search, onSearchChange, 
+  marketplaceFilter, onMarketplaceFilterChange, marketplaces,
+  statusFilter, onStatusFilterChange,
+  startDate, onStartDateChange,
+  endDate, onEndDateChange,
+  onClearFilters,
+  onManualClick, onImportClick 
 }: VendasHeaderProps) => {
 
+  const hasActiveFilters = statusFilter !== "all" || startDate !== "" || endDate !== "" || marketplaceFilter !== "all";
+
   return (
-    <div className="flex flex-col lg:flex-row gap-4 justify-between items-center w-full mb-6">
-      {/* Área de Filtros e Busca */}
-      <div className="flex flex-col sm:flex-row gap-4 flex-1 w-full lg:max-w-3xl">
-        <div className="relative flex-1">
+    <div className="flex flex-col gap-4 w-full mb-6">
+      
+      {/* LINHA 1: Título e Ações Principais */}
+      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
+         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gerenciamento de Vendas</h1>
+         
+         {/* Botão de Ações (Importar/Criar) */}
+         <div className="flex gap-2 w-full lg:w-auto">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button className="bg-slate-900 hover:bg-slate-800 text-white gap-2 rounded-xl h-10 px-6 shadow-md shadow-slate-200 w-full lg:w-auto transition-all active:scale-95">
+                  Ações <ChevronDown className="w-4 h-4 opacity-70" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-64 rounded-xl p-2 shadow-xl border-slate-100">
+                <DropdownMenuItem onClick={onManualClick} className="cursor-pointer py-2.5">
+                  <Plus className="w-4 h-4 mr-2 text-blue-500" /> Nova Venda
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="my-1" />
+                <div className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Importação</div>
+                <DropdownMenuItem onClick={() => onImportClick('venda')} className="cursor-pointer py-2.5">
+                  <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Planilha de Vendas
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => onImportClick('pagamento')} className="cursor-pointer py-2.5">
+                  <FileUp className="w-4 h-4 mr-2 text-indigo-600" /> Planilha de Pagamentos
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+         </div>
+      </div>
+
+      {/* LINHA 2: Barra de Filtros Completa */}
+      <div className="bg-white p-3 rounded-xl border shadow-sm flex flex-col lg:flex-row gap-3 items-center">
+        
+        {/* Busca Texto */}
+        <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
-            placeholder="Buscar NF ou Marketplace..." 
+            placeholder="Buscar por NF, Loja..." 
             value={search} 
             onChange={(e) => onSearchChange(e.target.value)} 
-            className="pl-10 rounded-xl h-10 border-slate-200 focus-visible:ring-blue-400"
+            className="pl-10 rounded-lg border-slate-200 bg-slate-50 focus:bg-white transition-all"
           />
         </div>
-        
-        <Select value={marketplaceFilter} onValueChange={onMarketplaceFilterChange}>
-          <SelectTrigger className="w-full sm:w-[220px] rounded-xl h-10 border-slate-200">
-            <SelectValue placeholder="Filtrar por Marketplace" />
+
+        {/* Filtro Status */}
+        <Select value={statusFilter} onValueChange={onStatusFilterChange}>
+          <SelectTrigger className="w-full lg:w-[160px] rounded-lg border-slate-200 bg-slate-50">
+            <SelectValue placeholder="Status" />
           </SelectTrigger>
-          <SelectContent className="rounded-xl">
-            <SelectItem value="all">Todos Marketplaces</SelectItem>
+          <SelectContent>
+            <SelectItem value="all">Todos Status</SelectItem>
+            <SelectItem value="PENDENTE">🕒 Pendente</SelectItem>
+            <SelectItem value="PARCIALMENTE_PAGO">🟠 Parcial</SelectItem>
+            <SelectItem value="PAGO">✅ Pago</SelectItem>
+            <SelectItem value="CANCELADO">🚫 Cancelado</SelectItem>
+          </SelectContent>
+        </Select>
+
+        {/* Filtro Marketplace */}
+        <Select value={marketplaceFilter} onValueChange={onMarketplaceFilterChange}>
+          <SelectTrigger className="w-full lg:w-[180px] rounded-lg border-slate-200 bg-slate-50">
+            <SelectValue placeholder="Marketplace" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos Canais</SelectItem>
             {marketplaces.map((m) => (
-              <SelectItem key={m.id} value={m.id}>
-                {m.titulo}
-              </SelectItem>
+              <SelectItem key={m.id} value={m.id}>{m.titulo}</SelectItem>
             ))}
           </SelectContent>
         </Select>
-      </div>
 
-      {/* Botão de Ações Unificado */}
-      <div className="flex gap-2 w-full lg:w-auto">
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button className="bg-slate-900 hover:bg-slate-800 text-white gap-2 rounded-xl h-10 px-6 shadow-md shadow-slate-200 w-full lg:w-auto transition-all active:scale-95">
-              Ações 
-              <ChevronDown className="w-4 h-4 opacity-70" />
+        {/* Filtro Data (Simples HTML5 para evitar erro de componente) */}
+        <div className="flex items-center gap-2 w-full lg:w-auto">
+            <Input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                className="w-full lg:w-auto rounded-lg border-slate-200 bg-slate-50 text-xs"
+            />
+            <span className="text-slate-400">-</span>
+            <Input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => onEndDateChange(e.target.value)}
+                className="w-full lg:w-auto rounded-lg border-slate-200 bg-slate-50 text-xs"
+            />
+        </div>
+
+        {/* Botão Limpar */}
+        {hasActiveFilters && (
+            <Button variant="ghost" size="icon" onClick={onClearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50" title="Limpar Filtros">
+                <X className="w-4 h-4" />
             </Button>
-          </DropdownMenuTrigger>
-          
-          <DropdownMenuContent align="end" className="w-64 rounded-xl p-2 shadow-xl border-slate-100">
-            {/* Seção Cadastro Manual */}
-            <DropdownMenuItem 
-              onClick={onManualClick} 
-              className="rounded-lg cursor-pointer py-2.5 focus:bg-blue-50 focus:text-blue-700"
-            >
-              <Plus className="w-4 h-4 mr-2 text-blue-500" /> 
-              Nova Venda
-            </DropdownMenuItem>
-            
-            <DropdownMenuSeparator className="my-1" />
-            
-            {/* Seção Planilhas */}
-            <div className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-              Importação
-            </div>
-            
-            {/* AMBOS OS BOTÕES USAM O MESMO INPUT ID */}
-            <DropdownMenuItem className="rounded-lg cursor-pointer py-0 p-0 focus:bg-green-50 focus:text-green-700">
-              <label htmlFor="universal-import-input" className="flex items-center w-full py-2.5 px-2 cursor-pointer">
-                <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> 
-                Planilha de Vendas
-              </label>
-            </DropdownMenuItem>
-            
-            <DropdownMenuItem className="rounded-lg cursor-pointer py-0 p-0 focus:bg-indigo-50 focus:text-indigo-700">
-              <label htmlFor="universal-import-input" className="flex items-center w-full py-2.5 px-2 cursor-pointer">
-                <FileUp className="w-4 h-4 mr-2 text-indigo-600" /> 
-                Planilha de Pagamentos
-              </label>
-            </DropdownMenuItem>
-            
-            <DropdownMenuSeparator className="my-1" />
-            
-            {/* Seção Pagamento Manual (Ainda placeholder, ou implementar modal depois) */}
-            <DropdownMenuItem 
-              disabled // Desabilitado por enquanto ou criar modal de pagamento manual
-              className="rounded-lg cursor-pointer py-2.5 text-orange-600 font-medium focus:bg-orange-50 focus:text-orange-700 opacity-50"
-            >
-              <UserPlus className="w-4 h-4 mr-2" /> 
-              Novo Pagamento (Em breve)
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        {/* INPUT ÚNICO MÁGICO */}
-        <input 
-          type="file" 
-          id="universal-import-input" 
-          className="hidden" 
-          accept=".xlsx,.xls" 
-          onChange={onImportExcel} 
-          onClick={(e) => (e.target as HTMLInputElement).value = ""} // Permite selecionar o mesmo arquivo 2x seguidas
-        />
+        )}
       </div>
     </div>
   );

@@ -116,7 +116,7 @@ export function AppSidebar() {
       </SidebarContent>
 
       <SidebarFooter className="p-4">
-        <div className="glass-card rounded-xl p-4 bg-sidebar-accent/50">
+        <div className=" rounded-xl p-4 bg-white">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
               <Settings className="w-4 h-4 text-sidebar-primary" />
