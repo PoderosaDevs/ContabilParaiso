@@ -12,19 +12,21 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Switch } from "@/components/ui/switch"; // Importar o Switch
 import {
   Form,
   FormControl,
-  FormField,
+  FormDescription,
   FormItem,
   FormLabel,
+  FormField,
   FormMessage,
 } from "@/components/ui/form";
 
-// Schema rigoroso: titulo deve ser preenchido
+// Schema atualizado
 const formSchema = z.object({
-  // O .min(1) força que a string não seja vazia
   titulo: z.string().min(1, "O título é obrigatório"),
+  freteParte: z.boolean().default(false), // Garante que comece como false
 });
 
 type FormData = z.infer<typeof formSchema>;
@@ -32,7 +34,8 @@ type FormData = z.infer<typeof formSchema>;
 interface MarketplaceModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSave: (data: { titulo: string }) => void; // Tipagem obrigatória
+  // Atualizei a tipagem do onSave para aceitar o novo campo
+  onSave: (data: { titulo: string; freteParte: boolean }) => void; 
   marketplace?: any | null;
 }
 
@@ -46,28 +49,31 @@ export const MarketplaceModal = ({
 
   const form = useForm<FormData>({
     resolver: zodResolver(formSchema),
-    defaultValues: { titulo: "" },
+    defaultValues: { 
+      titulo: "", 
+      freteParte: false 
+    },
   });
 
-  // Limpa ou preenche o form sempre que o modal abre ou muda o item editado
   useEffect(() => {
     if (open) {
       form.reset({
         titulo: marketplace?.titulo || "",
+        freteParte: !!marketplace?.freteParte, // Garante valor booleano
       });
     }
   }, [open, marketplace, form]);
 
   const onSubmit = async (data: FormData) => {
-    setIsLoading(true);
-    try {
-      // Usamos o "as" para garantir que o tipo enviado é o exigido pela interface
-      await onSave(data as { titulo: string });
-      onOpenChange(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  setIsLoading(true);
+  try {
+    // Forçamos o tipo aqui, pois o Zod já garantiu a validade
+    await onSave(data as { titulo: string; freteParte: boolean });
+    onOpenChange(false);
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -77,11 +83,12 @@ export const MarketplaceModal = ({
             {marketplace ? "Editar" : "Novo"} Marketplace
           </DialogTitle>
           <DialogDescription>
-            Digite o nome do canal de venda.
+            Digite o nome do canal de venda e configurações de frete.
           </DialogDescription>
         </DialogHeader>
+
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <FormField
               control={form.control}
               name="titulo"
@@ -95,6 +102,29 @@ export const MarketplaceModal = ({
                 </FormItem>
               )}
             />
+
+            {/* Novo campo Switch */}
+            <FormField
+              control={form.control}
+              name="freteParte"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-3 shadow-sm">
+                  <div className="space-y-0.5">
+                    <FormLabel>Frete a parte?</FormLabel>
+                    <FormDescription>
+                      Marque se o frete for cobrado separadamente.
+                    </FormDescription>
+                  </div>
+                  <FormControl>
+                    <Switch
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                    />
+                  </FormControl>
+                </FormItem>
+              )}
+            />
+
             <DialogFooter>
               <Button
                 type="button"

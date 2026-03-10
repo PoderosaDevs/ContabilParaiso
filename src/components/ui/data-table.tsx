@@ -7,10 +7,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import React from "react";
 
+// Alteramos o tipo do header para aceitar Node (strings, elementos ou funções)
 interface Column<T> {
   key: string;
-  header: string;
+  header: React.ReactNode | (() => React.ReactNode); 
   render?: (item: T) => React.ReactNode;
   className?: string;
 }
@@ -44,7 +46,10 @@ export function DataTable<T extends { id: string }>({
                 key={column.key}
                 className={cn("font-semibold text-foreground", column.className)}
               >
-                {column.header}
+                {/* Lógica para renderizar se for função ou valor direto */}
+                {typeof column.header === "function" 
+                  ? column.header() 
+                  : column.header}
               </TableHead>
             ))}
           </TableRow>

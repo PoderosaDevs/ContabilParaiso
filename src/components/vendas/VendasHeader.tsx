@@ -4,7 +4,8 @@ import {
   Plus, 
   FileSpreadsheet, 
   FileUp,
-  Filter,
+  RotateCcw, // Ícone para Devolução
+  Banknote,  // Ícone para Reembolso
   X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -17,14 +18,12 @@ import {
 } from "@/components/ui/dropdown-menu";
 
 interface VendasHeaderProps {
-  // Busca e MKT
   search: string;
   onSearchChange: (value: string) => void;
   marketplaceFilter: string;
   onMarketplaceFilterChange: (value: string) => void;
   marketplaces: any[];
   
-  // NOVOS FILTROS
   statusFilter: string;
   onStatusFilterChange: (value: string) => void;
   startDate: string;
@@ -33,9 +32,9 @@ interface VendasHeaderProps {
   onEndDateChange: (value: string) => void;
   onClearFilters: () => void;
 
-  // Ações
   onManualClick: () => void;
-  onImportClick: (type: 'venda' | 'pagamento') => void;
+  // ATUALIZADO: Adicionado 'reembolso' e 'devolucao' na tipagem
+  onImportClick: (type: 'venda' | 'pagamento' | 'reembolso' | 'devolucao') => void;
 }
 
 export const VendasHeader = ({ 
@@ -53,11 +52,9 @@ export const VendasHeader = ({
   return (
     <div className="flex flex-col gap-4 w-full mb-6">
       
-      {/* LINHA 1: Título e Ações Principais */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
          <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gerenciamento de Vendas</h1>
          
-         {/* Botão de Ações (Importar/Criar) */}
          <div className="flex gap-2 w-full lg:w-auto">
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -69,23 +66,35 @@ export const VendasHeader = ({
                 <DropdownMenuItem onClick={onManualClick} className="cursor-pointer py-2.5">
                   <Plus className="w-4 h-4 mr-2 text-blue-500" /> Nova Venda
                 </DropdownMenuItem>
+                
                 <DropdownMenuSeparator className="my-1" />
                 <div className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Importação</div>
+                
                 <DropdownMenuItem onClick={() => onImportClick('venda')} className="cursor-pointer py-2.5">
                   <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Planilha de Vendas
                 </DropdownMenuItem>
+                
                 <DropdownMenuItem onClick={() => onImportClick('pagamento')} className="cursor-pointer py-2.5">
                   <FileUp className="w-4 h-4 mr-2 text-indigo-600" /> Planilha de Pagamentos
                 </DropdownMenuItem>
+
+                {/* ATUALIZADO: Reembolso com tipo correto e ícone apropriado */}
+                <DropdownMenuItem onClick={() => onImportClick('reembolso')} className="cursor-pointer py-2.5">
+                  <Banknote className="w-4 h-4 mr-2 text-rose-500" /> Planilha de Reembolso
+                </DropdownMenuItem>
+
+                {/* ATUALIZADO: Devolução com tipo correto e ícone apropriado */}
+                <DropdownMenuItem onClick={() => onImportClick('devolucao')} className="cursor-pointer py-2.5">
+                  <RotateCcw className="w-4 h-4 mr-2 text-amber-600" /> Planilha de Devolução
+                </DropdownMenuItem>
+
               </DropdownMenuContent>
             </DropdownMenu>
          </div>
       </div>
 
-      {/* LINHA 2: Barra de Filtros Completa */}
+      {/* Barra de Filtros (Mantida como original) */}
       <div className="bg-white p-3 rounded-xl border shadow-sm flex flex-col lg:flex-row gap-3 items-center">
-        
-        {/* Busca Texto */}
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
@@ -96,7 +105,6 @@ export const VendasHeader = ({
           />
         </div>
 
-        {/* Filtro Status */}
         <Select value={statusFilter} onValueChange={onStatusFilterChange}>
           <SelectTrigger className="w-full lg:w-[160px] rounded-lg border-slate-200 bg-slate-50">
             <SelectValue placeholder="Status" />
@@ -110,7 +118,6 @@ export const VendasHeader = ({
           </SelectContent>
         </Select>
 
-        {/* Filtro Marketplace */}
         <Select value={marketplaceFilter} onValueChange={onMarketplaceFilterChange}>
           <SelectTrigger className="w-full lg:w-[180px] rounded-lg border-slate-200 bg-slate-50">
             <SelectValue placeholder="Marketplace" />
@@ -123,7 +130,6 @@ export const VendasHeader = ({
           </SelectContent>
         </Select>
 
-        {/* Filtro Data (Simples HTML5 para evitar erro de componente) */}
         <div className="flex items-center gap-2 w-full lg:w-auto">
             <Input 
                 type="date" 
@@ -140,7 +146,6 @@ export const VendasHeader = ({
             />
         </div>
 
-        {/* Botão Limpar */}
         {hasActiveFilters && (
             <Button variant="ghost" size="icon" onClick={onClearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50" title="Limpar Filtros">
                 <X className="w-4 h-4" />

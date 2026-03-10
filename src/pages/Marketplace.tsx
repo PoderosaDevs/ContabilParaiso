@@ -3,7 +3,15 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DataTable } from "@/components/ui/data-table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Search, Plus, Store, MoreHorizontal, Pencil, Trash2, Loader2 } from "lucide-react";
+import {
+  Search,
+  Plus,
+  Store,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Loader2,
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,11 +36,15 @@ const Marketplace = () => {
   const [search, setSearch] = useState("");
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   const [modalOpen, setModalOpen] = useState(false);
-  const [editingMarketplace, setEditingMarketplace] = useState<any | null>(null);
+  const [editingMarketplace, setEditingMarketplace] = useState<any | null>(
+    null,
+  );
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [marketplaceToDelete, setMarketplaceToDelete] = useState<any | null>(null);
+  const [marketplaceToDelete, setMarketplaceToDelete] = useState<any | null>(
+    null,
+  );
 
   const fetchMarketplaces = async () => {
     try {
@@ -50,13 +62,14 @@ const Marketplace = () => {
     fetchMarketplaces();
   }, []);
 
-  const handleSave = async (data: { titulo: string }) => {
+  const handleSave = async (data: { titulo: string; freteParte: boolean }) => {
     try {
       if (editingMarketplace) {
-        await marketplaceService.update(editingMarketplace.id, data.titulo);
+        // Passando o objeto 'data' completo agora
+        await marketplaceService.update(editingMarketplace.id, data);
         toast.success("Atualizado com sucesso!");
       } else {
-        await marketplaceService.create(data.titulo);
+        await marketplaceService.create(data.titulo, data.freteParte);
         toast.success("Criado com sucesso!");
       }
       fetchMarketplaces();
@@ -80,7 +93,7 @@ const Marketplace = () => {
   };
 
   const filteredMarketplaces = marketplaces.filter((m) =>
-    m.titulo?.toLowerCase().includes(search.toLowerCase())
+    m.titulo?.toLowerCase().includes(search.toLowerCase()),
   );
 
   const columns = [
@@ -107,13 +120,26 @@ const Marketplace = () => {
       render: (item: any) => (
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="icon"><MoreHorizontal className="w-4 h-4" /></Button>
+            <Button variant="ghost" size="icon">
+              <MoreHorizontal className="w-4 h-4" />
+            </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end">
-            <DropdownMenuItem onClick={() => { setEditingMarketplace(item); setModalOpen(true); }}>
+            <DropdownMenuItem
+              onClick={() => {
+                setEditingMarketplace(item);
+                setModalOpen(true);
+              }}
+            >
               <Pencil className="w-4 h-4 mr-2" /> Editar
             </DropdownMenuItem>
-            <DropdownMenuItem className="text-destructive" onClick={() => { setMarketplaceToDelete(item); setDeleteDialogOpen(true); }}>
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => {
+                setMarketplaceToDelete(item);
+                setDeleteDialogOpen(true);
+              }}
+            >
               <Trash2 className="w-4 h-4 mr-2" /> Excluir
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -128,23 +154,35 @@ const Marketplace = () => {
         <div className="flex flex-col sm:flex-row gap-4 justify-between">
           <div className="relative flex-1 max-w-md">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-            <Input 
-              placeholder="Buscar..." 
-              value={search} 
-              onChange={(e) => setSearch(e.target.value)} 
-              className="pl-10" 
+            <Input
+              placeholder="Buscar..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10"
             />
           </div>
-          <Button className="gradient-primary" onClick={() => { setEditingMarketplace(null); setModalOpen(true); }}>
+          <Button
+            className="gradient-primary"
+            onClick={() => {
+              setEditingMarketplace(null);
+              setModalOpen(true);
+            }}
+          >
             <Plus className="w-4 h-4 mr-2" /> Novo
           </Button>
         </div>
 
         <div className="bg-card border rounded-xl">
           {loading ? (
-            <div className="p-10 flex justify-center"><Loader2 className="animate-spin" /></div>
+            <div className="p-10 flex justify-center">
+              <Loader2 className="animate-spin" />
+            </div>
           ) : (
-            <DataTable data={filteredMarketplaces} columns={columns} emptyMessage="Nenhum canal encontrado." />
+            <DataTable
+              data={filteredMarketplaces}
+              columns={columns}
+              emptyMessage="Nenhum canal encontrado."
+            />
           )}
         </div>
       </div>
@@ -160,11 +198,18 @@ const Marketplace = () => {
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Confirmar Exclusão</AlertDialogTitle>
-            <AlertDialogDescription>Deseja excluir "{marketplaceToDelete?.titulo}"?</AlertDialogDescription>
+            <AlertDialogDescription>
+              Deseja excluir "{marketplaceToDelete?.titulo}"?
+            </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete} className="bg-destructive">Confirmar</AlertDialogAction>
+            <AlertDialogAction
+              onClick={handleDelete}
+              className="bg-destructive"
+            >
+              Confirmar
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

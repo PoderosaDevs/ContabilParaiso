@@ -4,8 +4,11 @@ import api from "./api";
 // TIPAGENS (INTERFACES)
 // ==========================================
 
-// Atualizado com os status que definimos na lógica visual e no Prisma
-export type VendaStatus = "PENDENTE" | "PARCIALMENTE_PAGO" | "PAGO" | "CANCELADO";
+export type VendaStatus =
+  | "PENDENTE"
+  | "PARCIALMENTE_PAGO"
+  | "PAGO"
+  | "CANCELADO";
 
 export interface Marketplace {
   id: string;
@@ -15,48 +18,38 @@ export interface Marketplace {
 
 export interface Pagamento {
   id: string;
-  valor: number | string; // Pode vir string do Decimal do banco, front trata
+  valor: number | string;
   data: string;
   nfVenda: string;
   vendaId: string;
   numeroParcela: number;
-  // Campos opcionais de auditoria se você adicionou no banco
-  comissaoRetida?: number | null; 
+  comissaoRetida?: number | null;
 }
 
 export interface Venda {
   id: string;
   nf: string;
   loja: string;
-  baseIcms: number; // Valor Bruto
-  liquidoReceber: number; // Valor Líquido (calculado ou previsto)
-  
+  baseIcms: number;
+  liquidoReceber: number;
   comissaoVenda: number | null;
   comissaoFrete: number | null;
   desconto: number | null;
-  
-  status: VendaStatus; 
-  
+  status: VendaStatus;
   marketplaceId: string;
   marketplace?: Marketplace;
-  
-  dataVenda: string; // <-- Importante: Data real da venda (Excel)
-  createdAt: string; // Data de registro no sistema
-  
+  dataVenda: string;
+  createdAt: string;
   qtdParcelas: number | null;
-  
-  // <-- CRUCIAL: Array de pagamentos para calcular a barra de progresso
-  pagamentos?: Pagamento[]; 
+  pagamentos?: Pagamento[];
 }
 
-// DTO para CRIAR uma venda (Manual ou Importação)
 export interface CreateVendaDTO {
   nf: string;
   loja: string;
-  marketplaceId?: string | null; // Pode ser null se não mapeou ainda
+  marketplaceId?: string | null;
   baseIcms: number;
-  dataVenda?: string; // Data vinda da planilha
-  
+  dataVenda?: string;
   comissaoVenda?: number;
   comissaoFrete?: number;
   desconto?: number;
@@ -64,23 +57,27 @@ export interface CreateVendaDTO {
   liquidoReceber?: number;
 }
 
-// DTO Flexível: Aceita tanto o padrão do banco quanto os nomes da Planilha de Pagamentos
+// NOVO: DTO para Reembolsos e Devoluções (Modal Unificado)
+export interface CreateOperationDTO {
+  nota: string;
+  loja: string;
+  data: string;
+  valor: number;
+  motivo: number; // ID numérico 1-19 que mapeamos no modal
+}
+
 export interface CreatePagamentoDTO {
-  // --- Campos Padrão (API) ---
   valor?: number;
   data?: Date | string;
-  nfVenda?: string; 
+  nfVenda?: string;
   numeroParcela?: number;
-  
-  // --- Campos da Planilha (Importação) ---
-  // Adicionamos aqui para o TS aceitar o objeto `paymentPreviewData` direto
-  nota?: string;           // Vira nfVenda
-  repasse?: number;        // Vira valor
-  parcelaPaga?: number;    // Vira numeroParcela
-  parcelas?: number;       // Vira qtdParcelas (update na venda)
-  comissaoVenda?: number;  // Para auditoria/update
-  comissaoFrete?: number;  // Para auditoria/update
-  baseIcms?: number;       // Para validação
+  nota?: string;
+  repasse?: number;
+  parcelaPaga?: number;
+  parcelas?: number;
+  comissaoVenda?: number;
+  comissaoFrete?: number;
+  baseIcms?: number;
   loja?: string;
 }
 
@@ -88,8 +85,8 @@ export interface ImportResponse {
   count: number;
   message: string;
   processados?: number;
-  falhas?: string[]; // Lista NFs que deram erro
-  duplicates?: string[]; // Lista NFs/Parcelas duplicadas
+  falhas?: string[];
+  duplicates?: string[];
 }
 
 // ==========================================
@@ -100,45 +97,55 @@ export const marketplaceService = {
   getAll: () => api.get<Marketplace[]>("/marketplaces").then((res) => res.data),
   getById: (id: string) =>
     api.get<Marketplace>(`/marketplaces/${id}`).then((res) => res.data),
-  create: (titulo: string) =>
-    api.post<Marketplace>("/marketplaces", { titulo }).then((res) => res.data),
-  update: (id: string, titulo: string) =>
-    api.put<Marketplace>(`/marketplaces/${id}`, { titulo }).then((res) => res.data),
+  create: (titulo: string, freteParte: boolean) =>
+    api
+      .post<Marketplace>("/marketplaces", { titulo, freteParte })
+      .then((res) => res.data),
+  update: (id: string, data: { titulo: string; freteParte: boolean }) =>
+    api.put<Marketplace>(`/marketplaces/${id}`, data).then((res) => res.data),
   delete: (id: string) => api.delete(`/marketplaces/${id}`),
 };
 
 export const vendaService = {
-  // Busca todas as vendas (incluindo pagamentos para a tabela rica)
   getAll: () => api.get<Venda[]>("/vendas").then((res) => res.data),
-  
   getById: (id: string) =>
     api.get<Venda>(`/vendas/${id}`).then((res) => res.data),
-  
-  create: (data: CreateVendaDTO) => 
+  create: (data: CreateVendaDTO) =>
     api.post<Venda>("/vendas", data).then((res) => res.data),
-  
+
   // Importação em Massa de Vendas
   importBulk: (vendas: CreateVendaDTO[]) =>
-    api.post<ImportResponse>("/vendas/import", { vendas }).then((res) => res.data),
-    
+    api
+      .post<ImportResponse>("/vendas/import", { vendas })
+      .then((res) => res.data),
+
+  // --- NOVOS MÉTODOS DE OPERAÇÃO ---
+  importRefunds: (reembolsos: CreateOperationDTO[]) =>
+    api
+      .post<ImportResponse>("/vendas/import-reembolsos", { reembolsos })
+      .then((res) => res.data),
+
+  importReturns: (devolucoes: CreateOperationDTO[]) =>
+    api
+      .post<ImportResponse>("/vendas/import-devolucoes", { devolucoes })
+      .then((res) => res.data),
+  // ---------------------------------
+
   update: (id: string, data: Partial<CreateVendaDTO>) =>
     api.put<Venda>(`/vendas/${id}`, data).then((res) => res.data),
-  
+
   delete: (id: string) => api.delete(`/vendas/${id}`),
 };
 
 export const pagamentoService = {
   getAll: () => api.get<Pagamento[]>("/pagamentos").then((res) => res.data),
-  
   create: (data: CreatePagamentoDTO) =>
     api.post<Pagamento>("/pagamentos", data).then((res) => res.data),
-
-  // Importação em Massa de Pagamentos (Aceita o array do Excel)
   importBulk: (pagamentos: CreatePagamentoDTO[]) =>
-    api.post<ImportResponse>("/pagamentos/import", { pagamentos }).then((res) => res.data),
-
+    api
+      .post<ImportResponse>("/pagamentos/import", { pagamentos })
+      .then((res) => res.data),
   update: (id: string, data: Partial<CreatePagamentoDTO>) =>
     api.put<Pagamento>(`/pagamentos/${id}`, data).then((res) => res.data),
-    
   delete: (id: string) => api.delete(`/pagamentos/${id}`),
 };

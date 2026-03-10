@@ -1,7 +1,13 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
-import { Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
+} from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
 import { DataTable } from "@/components/ui/data-table";
@@ -11,10 +17,15 @@ import { Button } from "@/components/ui/button";
 import { ImportPreviewModal } from "@/components/vendas/ImportVendaModal";
 import { StoreMappingModal } from "@/components/vendas/StoreMappingModal";
 import { VendaModal } from "@/components/modals/VendaModal";
-import { PaymentImportModal } from "@/components/vendas/PaymentImportModal"; // Certifique-se do caminho correto
+import { PaymentImportModal } from "@/components/vendas/PaymentImportModal";
+import { OperationImportModal } from "@/components/vendas/OperationImportModal";
 
 // Serviços e Colunas
-import { vendaService, marketplaceService, pagamentoService } from "@/services/api-routes";
+import {
+  vendaService,
+  marketplaceService,
+  pagamentoService,
+} from "@/services/api-routes";
 import { getVendasColumns } from "@/components/vendas/columns";
 import { VendasHeader } from "@/components/vendas/VendasHeader";
 import { VendasStats } from "@/components/vendas/VendasStats";
@@ -24,7 +35,7 @@ const Vendas = () => {
   const [vendas, setVendas] = useState<any[]>([]);
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  
+
   // --- ESTADOS DE CONTROLE ---
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
@@ -33,16 +44,20 @@ const Vendas = () => {
   const itemsPerPage = 20;
 
   // --- ESTADOS DE IMPORTAÇÃO ---
-  const [importType, setImportType] = useState<'venda' | 'pagamento'>('venda');
+  const [importType, setImportType] = useState<
+    "venda" | "pagamento" | "reembolso" | "devolucao"
+  >("venda");
   const [isConfirmingImport, setIsConfirmingImport] = useState(false);
-  
-  // Dados de Preview
-  const [previewData, setPreviewData] = useState<any[]>([]); // Vendas
-  const [paymentPreviewData, setPaymentPreviewData] = useState<any[]>([]); // Pagamentos
 
-  // Modais
+  // Dados de Preview
+  const [previewData, setPreviewData] = useState<any[]>([]);
+  const [paymentPreviewData, setPaymentPreviewData] = useState<any[]>([]);
+  const [operationPreviewData, setOperationPreviewData] = useState<any[]>([]);
+
+  // Controle de Modais
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
+  const [operationModalOpen, setOperationModalOpen] = useState(false);
   const [mappingModalOpen, setMappingModalOpen] = useState(false);
   const [uniqueStores, setUniqueStores] = useState<string[]>([]);
 
@@ -50,11 +65,10 @@ const Vendas = () => {
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVenda, setEditingVenda] = useState<any | null>(null);
 
-  // --- NOVOS ESTADOS DE FILTRO ---
+  // --- FILTROS ---
   const [statusFilter, setStatusFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
-
 
   // --- CARREGAMENTO INICIAL ---
   const fetchData = async () => {
@@ -77,77 +91,103 @@ const Vendas = () => {
     fetchData();
   }, []);
 
-// --- LÓGICA DE FILTRAGEM ATUALIZADA ---
+  // --- LÓGICA DE FILTRAGEM ---
   const filteredVendas = useMemo(() => {
     return vendas.filter((v) => {
-      // 1. Busca Texto
       const searchLower = search.toLowerCase();
       const matchesSearch =
         (v.nf && String(v.nf).toLowerCase().includes(searchLower)) ||
         (v.loja && String(v.loja).toLowerCase().includes(searchLower));
 
-      // 2. Filtro Marketplace
       const matchesMarketplace =
         marketplaceFilter === "all" || v.marketplaceId === marketplaceFilter;
-      
-      // 3. Filtro Status
-      const matchesStatus = 
-        statusFilter === "all" || v.status === statusFilter;
+      const matchesStatus = statusFilter === "all" || v.status === statusFilter;
 
-      // 4. Filtro Data (Início e Fim)
       let matchesDate = true;
       if (startDate || endDate) {
-          const vendaDate = new Date(v.dataVenda).setHours(0,0,0,0);
-          const start = startDate ? new Date(startDate).setHours(0,0,0,0) : null;
-          const end = endDate ? new Date(endDate).setHours(0,0,0,0) : null;
-
-          if (start && vendaDate < start) matchesDate = false;
-          if (end && vendaDate > end) matchesDate = false;
+        const vendaDate = new Date(v.dataVenda).setHours(0, 0, 0, 0);
+        const start = startDate
+          ? new Date(startDate).setHours(0, 0, 0, 0)
+          : null;
+        const end = endDate ? new Date(endDate).setHours(0, 0, 0, 0) : null;
+        if (start && vendaDate < start) matchesDate = false;
+        if (end && vendaDate > end) matchesDate = false;
       }
-
-      return matchesSearch && matchesMarketplace && matchesStatus && matchesDate;
+      return (
+        matchesSearch && matchesMarketplace && matchesStatus && matchesDate
+      );
     });
   }, [vendas, search, marketplaceFilter, statusFilter, startDate, endDate]);
 
-  // --- ESTATÍSTICAS (Baseadas no filtro atual) ---
+  // --- ESTATÍSTICAS ---
   const stats = useMemo(() => {
-    const totalBaseIcms = filteredVendas.reduce((acc, v) => acc + Number(v.baseIcms || 0), 0);
-    
-    // Calcula o total realmente recebido (soma dos pagamentos vinculados)
+    // 1. Total Base ICMS (Receita Prevista)
+    const totalBaseIcms = filteredVendas.reduce(
+      (acc, v) => acc + Number(v.baseIcms || 0),
+      0,
+    );
+
+    // 2. Total Recebido (Soma dos pagamentos vinculados)
     const totalRecebido = filteredVendas.reduce((acc, v) => {
-        const pagos = v.pagamentos?.reduce((pAcc: number, p: any) => pAcc + Number(p.valor), 0) || 0;
-        return acc + pagos;
+      const pagos =
+        v.pagamentos?.reduce(
+          (pAcc: number, p: any) => pAcc + Number(p.valor),
+          0,
+        ) || 0;
+      return acc + pagos;
     }, 0);
 
-    return { count: filteredVendas.length, totalBaseIcms, totalRecebido };
+    // 3. Total de Taxas (Soma de Comissão Venda + Comissão Frete)
+    const totalTaxas = filteredVendas.reduce((acc, v) => {
+      const taxas = Number(v.comissaoVenda || 0) + Number(v.comissaoFrete || 0);
+      return acc + taxas;
+    }, 0);
+
+    return {
+      count: filteredVendas.length,
+      totalBaseIcms,
+      totalRecebido,
+      totalTaxas, // Novo campo para o seu VendasStats
+    };
   }, [filteredVendas]);
 
-  // --- PAGINAÇÃO (Client-Side) ---
+  // --- PAGINAÇÃO ---
   const totalPages = Math.ceil(filteredVendas.length / itemsPerPage);
-  
   const paginatedVendas = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredVendas.slice(start, start + itemsPerPage);
-  }, [filteredVendas, currentPage, itemsPerPage]);
+  }, [filteredVendas, currentPage]);
 
-  // Reseta para página 1 se filtrar
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    if (endPage - startPage + 1 < maxButtons)
+      startPage = Math.max(1, endPage - maxButtons + 1);
+    for (let i = startPage; i <= endPage; i++) {
+      if (i >= 1) pages.push(i);
+    }
+    return pages;
+  };
+
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, marketplaceFilter]);
+  }, [search, marketplaceFilter, statusFilter, startDate, endDate]);
 
-
-  // --- TRIGGER DO INPUT DE ARQUIVO ---
-  const handleTriggerImport = (type: 'venda' | 'pagamento') => {
+  // --- IMPORTAÇÃO ---
+  const handleTriggerImport = (
+    type: "venda" | "pagamento" | "reembolso" | "devolucao",
+  ) => {
     setImportType(type);
     setTimeout(() => {
-        if (fileInputRef.current) {
-            fileInputRef.current.value = ""; 
-            fileInputRef.current.click();
-        }
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+        fileInputRef.current.click();
+      }
     }, 0);
   };
 
-  // --- LEITURA DO EXCEL ---
   const handleImportExcel = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -159,226 +199,230 @@ const Vendas = () => {
         const wb = XLSX.read(bstr, { type: "binary" });
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rawData = XLSX.utils.sheet_to_json(ws);
-
         if (!rawData.length) {
           toast.warning("Planilha vazia.");
           return;
         }
 
-        // --- Helpers de Parsing ---
         const excelDateToJS = (serial: any) => {
-           if (!serial) return new Date().toISOString();
-           if (typeof serial === 'string') return serial;
-           const utc_days  = Math.floor(serial - 25569);
-           const utc_value = utc_days * 86400;                                        
-           const date_info = new Date(utc_value * 1000);
-           return date_info.toISOString();
-        }
+          if (!serial) return new Date().toISOString();
+          if (typeof serial === "string") return serial;
+          const date = new Date(Math.floor(serial - 25569) * 86400 * 1000);
+          return date.toLocaleDateString("pt-BR");
+        };
 
         const parseNum = (v: any) => {
           if (typeof v === "number") return v;
           if (!v) return 0;
-          return parseFloat(String(v).replace("R$", "").replace(/\./g, "").replace(",", ".").trim()) || 0;
+          return (
+            parseFloat(
+              String(v)
+                .replace("R$", "")
+                .replace(/\./g, "")
+                .replace(",", ".")
+                .trim(),
+            ) || 0
+          );
         };
 
         const getVal = (item: any, possibleNames: string[]) => {
-            const keys = Object.keys(item);
-            for (const name of possibleNames) {
-              const foundKey = keys.find(k => k.trim().toUpperCase() === name.toUpperCase());
-              if (foundKey) return item[foundKey];
-            }
-            return "";
+          const keys = Object.keys(item);
+          for (const name of possibleNames) {
+            const foundKey = keys.find(
+              (k) => k.trim().toUpperCase() === name.toUpperCase(),
+            );
+            if (foundKey) return item[foundKey];
+          }
+          return "";
         };
 
-        // --- LÓGICA DE DECISÃO (VENDA vs PAGAMENTO) ---
-        if (importType === 'venda') {
-            const mapped = rawData.map((item: any) => {
-                const rawNf = getVal(item, ["NF", "NOTA", "NOTA FISCAL", "NUMERO", "DOC"]);
-                const rawLoja = getVal(item, ["LOJA", "CLIENTE", "NOME LOJA"]) || "LOJA PADRÃO";
-                const rawBase = getVal(item, ["BASE ICMS", "VALOR", "VLR CONTABIL"]);
-                const rawDataVenda = getVal(item, ["DATA", "DATA VENDA", "EMISSAO"]);
-
-                return {
-                    nf: rawNf ? String(rawNf).trim() : "???",
-                    loja: String(rawLoja).trim(),
-                    baseIcms: parseNum(rawBase),
-                    dataVenda: typeof rawDataVenda === 'number' ? excelDateToJS(rawDataVenda) : rawDataVenda,
-                };
-            }).filter((i: any) => i.baseIcms > 0 || i.nf !== "???");
-
-            setPreviewData(mapped);
-            setPreviewModalOpen(true);
-
-        } else {
-            // Importação de Pagamentos
-            const mapped = rawData.map((item: any) => {
-                const nota = getVal(item, ["NOTA", "NF", "NUMERO"]);
-                const parcelaPaga = getVal(item, ["PARCELA PAGA", "PARC PAGA"]);
-                const parcelas = getVal(item, ["PARCELAS", "TOTAL PARCELAS", "QTD PARC"]);
-                const repasse = getVal(item, ["REPASSE", "VALOR REPASSE", "LIQUIDO"]);
-                const comissaoVenda = getVal(item, ["COMISSÃO VENDA", "COMISSAO VENDA"]);
-                const comissaoFrete = getVal(item, ["COMISSÃO FRETE", "COMISSAO FRETE"]);
-                const baseIcms = getVal(item, ["BASE ICMS", "BASE DE CALCULO"]);
-                const loja = getVal(item, ["LOJA", "CLIENTE"]);
-
-                return {
-                    nota: nota ? String(nota).trim() : "???",
-                    loja: loja ? String(loja).trim() : "DESCONHECIDO",
-                    parcelaPaga: parseInt(String(parcelaPaga)) || 1,
-                    parcelas: parseInt(String(parcelas)) || 1,
-                    repasse: parseNum(repasse),
-                    comissaoVenda: parseNum(comissaoVenda),
-                    comissaoFrete: parseNum(comissaoFrete),
-                    baseIcms: parseNum(baseIcms),
-                };
-            }).filter((i: any) => i.repasse > 0 || i.nota !== "???");
-
-            setPaymentPreviewData(mapped);
-            setPaymentModalOpen(true);
+        if (importType === "venda") {
+          const mapped = rawData.map((item: any) => ({
+            nf: String(getVal(item, ["NF", "NOTA", "DOC"]) || "???").trim(),
+            loja: String(
+              getVal(item, ["LOJA", "CLIENTE"]) || "LOJA PADRÃO",
+            ).trim(),
+            baseIcms: parseNum(getVal(item, ["BASE ICMS", "VALOR"])),
+            dataVenda:
+              typeof getVal(item, ["DATA"]) === "number"
+                ? excelDateToJS(getVal(item, ["DATA"]))
+                : getVal(item, ["DATA"]),
+          }));
+          setPreviewData(mapped);
+          setPreviewModalOpen(true);
+        } else if (importType === "pagamento") {
+          const mapped = rawData.map((item: any) => ({
+            nota: String(getVal(item, ["NOTA", "NF"]) || "???").trim(),
+            loja: String(
+              getVal(item, ["LOJA", "CLIENTE"]) || "DESCONHECIDA",
+            ).trim(),
+            repasse: parseNum(getVal(item, ["REPASSE", "VALOR", "LIQUIDO"])),
+            comissaoVenda: parseNum(getVal(item, ["COMISSÃO VENDA"])),
+            comissaoFrete: parseNum(getVal(item, ["COMISSÃO FRETE"])),
+            baseIcms: parseNum(getVal(item, ["BASE ICMS"])),
+            parcelaPaga: parseInt(String(getVal(item, ["PARCELA PAGA"]))) || 1,
+            parcelas: parseInt(String(getVal(item, ["PARCELAS"]))) || 1,
+          }));
+          setPaymentPreviewData(mapped);
+          setPaymentModalOpen(true);
+        } else if (importType === "reembolso" || importType === "devolucao") {
+          const mapped = rawData.map((item: any) => ({
+            nota: String(getVal(item, ["NOTA", "NF"]) || "???").trim(),
+            loja: String(
+              getVal(item, ["LOJA", "CLIENTE"]) || "DESCONHECIDA",
+            ).trim(),
+            data:
+              typeof getVal(item, ["DATA"]) === "number"
+                ? excelDateToJS(getVal(item, ["DATA"]))
+                : getVal(item, ["DATA"]),
+            valor: parseNum(
+              getVal(item, ["VALOR", "TOTAL", "DEVOLUCAO", "REEMBOLSO"]),
+            ),
+            motivo: parseInt(String(getVal(item, ["MOTIVO", "ID"]))) || 16,
+          }));
+          setOperationPreviewData(mapped);
+          setOperationModalOpen(true);
         }
       } catch (err) {
-        console.error(err);
-        toast.error("Erro ao ler arquivo. Verifique o formato.");
+        toast.error("Erro ao ler arquivo.");
       }
     };
     reader.readAsBinaryString(file);
   };
 
-  // --- CONFIRMAR IMPORTAÇÃO VENDAS ---
+  // --- FINALIZAÇÃO ---
   const handleFinalizeImportVenda = async (mappings: any[]) => {
     setIsConfirmingImport(true);
     try {
-      const payload = previewData.map((item) => {
-        const mapping = mappings.find((m) => m.storeName === item.loja);
-        return {
-          ...item,
-          marketplaceId: mapping?.marketplaceId || null, 
-        };
-      });
-
-      const res = await vendaService.importBulk(payload);
-      toast.success(res.message || "Importação de Vendas concluída");
-      
+      const payload = previewData.map((item) => ({
+        ...item,
+        marketplaceId:
+          mappings.find((m) => m.storeName === item.loja)?.marketplaceId ||
+          null,
+      }));
+      await vendaService.importBulk(payload);
+      toast.success("Vendas importadas!");
       setMappingModalOpen(false);
-      setPreviewModalOpen(false);
       fetchData();
-    } catch (e: any) {
-      toast.error(e.response?.data?.message || "Erro na importação.");
+    } catch {
+      toast.error("Erro na importação.");
     } finally {
       setIsConfirmingImport(false);
     }
   };
 
-  // --- CONFIRMAR IMPORTAÇÃO PAGAMENTOS ---
   const handleFinalizeImportPagamento = async () => {
     setIsConfirmingImport(true);
     try {
-      const res = await pagamentoService.importBulk(paymentPreviewData);
-      
-      const msg = res.message || `${paymentPreviewData.length} pagamentos processados!`;
-      toast.success(msg);
-      
+      await pagamentoService.importBulk(paymentPreviewData);
+      toast.success("Pagamentos salvos!");
       setPaymentModalOpen(false);
-      setPaymentPreviewData([]); 
-      await fetchData(); 
+      fetchData();
+    } catch {
+      toast.error("Erro nos pagamentos.");
+    } finally {
+      setIsConfirmingImport(false);
+    }
+  };
 
-    } catch (e: any) {
-      const errorMsg = e.response?.data?.message || "Erro ao salvar pagamentos.";
-      toast.error(errorMsg);
+  const handleFinalizeOperation = async () => {
+    setIsConfirmingImport(true);
+    try {
+      const service =
+        importType === "reembolso"
+          ? vendaService.importRefunds
+          : vendaService.importReturns;
+      await service(operationPreviewData);
+      toast.success(
+        `${importType === "reembolso" ? "Reembolsos" : "Devoluções"} processados!`,
+      );
+      setOperationModalOpen(false);
+      fetchData();
+    } catch {
+      toast.error("Erro ao processar operação.");
     } finally {
       setIsConfirmingImport(false);
     }
   };
 
   // --- CRUD HANDLERS ---
+  const handleSaveVenda = async (data: any) => {
+    try {
+      if (editingVenda) {
+        await vendaService.update(editingVenda.id, data);
+        toast.success("Venda atualizada!");
+      } else {
+        await vendaService.create(data);
+        toast.success("Venda criada!");
+      }
+      setModalOpen(false);
+      fetchData();
+    } catch {
+      toast.error("Erro ao salvar.");
+    }
+  };
+
   const handleEdit = (item: any) => {
     setEditingVenda(item);
     setModalOpen(true);
   };
-
   const handleDelete = async (id: string) => {
-    if(!confirm("Tem certeza que deseja excluir esta venda e seus pagamentos?")) return;
+    if (!confirm("Excluir esta venda?")) return;
     try {
-        await vendaService.delete(id);
-        toast.success("Venda excluída com sucesso");
-        fetchData();
-    } catch (error: any) {
-        toast.error("Erro ao excluir venda");
+      await vendaService.delete(id);
+      toast.success("Excluída");
+      fetchData();
+    } catch {
+      toast.error("Erro");
     }
   };
 
-  const handleSaveVenda = async (data: any) => {
-    try {
-        if (editingVenda) {
-           await vendaService.update(editingVenda.id, data);
-           toast.success("Venda atualizada!");
-        } else {
-           await vendaService.create(data);
-           toast.success("Venda criada com sucesso!");
-        }
-        setModalOpen(false);
-        fetchData();
-    } catch (e: any) {
-        toast.error(e.message || "Erro ao salvar venda.");
-    }
-  };
-
-  // Função para limpar filtros
-  const clearFilters = () => {
-      setSearch("");
-      setMarketplaceFilter("all");
-      setStatusFilter("all");
-      setStartDate("");
-      setEndDate("");
-      setCurrentPage(1);
-  };
-
-  // Definição das colunas da tabela
   const columns = getVendasColumns(handleEdit, handleDelete);
 
   return (
     <AppLayout title="Gestão de Vendas">
       <div className="space-y-6">
-        {/* HEADER: Busca, Filtros e Botões de Ação */}
         <VendasHeader
           search={search}
-          onSearchChange={(val) => { setSearch(val); setCurrentPage(1); }}
-          
+          onSearchChange={setSearch}
           marketplaceFilter={marketplaceFilter}
-          onMarketplaceFilterChange={(val) => { setMarketplaceFilter(val); setCurrentPage(1); }}
-          
+          onMarketplaceFilterChange={setMarketplaceFilter}
           statusFilter={statusFilter}
-          onStatusFilterChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
-          
+          onStatusFilterChange={setStatusFilter}
           startDate={startDate}
-          onStartDateChange={(val) => { setStartDate(val); setCurrentPage(1); }}
+          onStartDateChange={setStartDate}
           endDate={endDate}
-          onEndDateChange={(val) => { setEndDate(val); setCurrentPage(1); }}
-          
-          onClearFilters={clearFilters}
-          
+          onEndDateChange={setEndDate}
+          onClearFilters={() => {
+            setSearch("");
+            setMarketplaceFilter("all");
+            setStatusFilter("all");
+            setStartDate("");
+            setEndDate("");
+          }}
           marketplaces={marketplaces}
-          onManualClick={() => { setEditingVenda(null); setModalOpen(true); }}
+          onManualClick={() => {
+            setEditingVenda(null);
+            setModalOpen(true);
+          }}
           onImportClick={handleTriggerImport}
         />
-        
-        {/* INPUT FILE OCULTO (Compartilhado) */}
-        <input 
-            type="file" 
-            ref={fileInputRef}
-            className="hidden" 
-            accept=".xlsx,.xls,.csv" 
-            onChange={handleImportExcel} 
+
+        <input
+          type="file"
+          ref={fileInputRef}
+          className="hidden"
+          accept=".xlsx,.xls,.csv"
+          onChange={handleImportExcel}
         />
 
-        {/* CARDS DE ESTATÍSTICA */}
         <VendasStats
           count={stats.count}
           totalLiquido={stats.totalBaseIcms}
           totalRecebido={stats.totalRecebido}
+          totalTaxas={stats.totalTaxas}
         />
 
-        {/* TABELA COM PAGINAÇÃO */}
         <div className="bg-white border rounded-xl shadow-sm overflow-hidden min-h-[400px] flex flex-col">
           {loading ? (
             <div className="flex-1 flex justify-center items-center">
@@ -386,17 +430,23 @@ const Vendas = () => {
             </div>
           ) : (
             <>
-              {/* Tabela de Dados */}
               <div className="flex-1 overflow-auto">
-                 <DataTable data={paginatedVendas} columns={columns} />
+                <DataTable data={paginatedVendas} columns={columns} />
               </div>
-              
-              {/* Rodapé de Paginação */}
               <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50">
                 <span className="text-sm text-slate-500 font-medium">
-                  Página {currentPage} de {totalPages || 1}
+                  {filteredVendas.length} registros no total
                 </span>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(1)}
+                    disabled={currentPage === 1}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronsLeft className="w-4 h-4" />
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -406,14 +456,38 @@ const Vendas = () => {
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
+                  <div className="flex gap-1 mx-2">
+                    {getPageNumbers().map((num) => (
+                      <Button
+                        key={num}
+                        variant={currentPage === num ? "default" : "outline"}
+                        size="sm"
+                        onClick={() => setCurrentPage(num)}
+                        className={`h-8 w-8 p-0 text-xs ${currentPage === num ? "bg-slate-900 text-white" : ""}`}
+                      >
+                        {num}
+                      </Button>
+                    ))}
+                  </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    onClick={() =>
+                      setCurrentPage((p) => Math.min(totalPages, p + 1))
+                    }
                     disabled={currentPage >= totalPages}
                     className="h-8 w-8 p-0"
                   >
                     <ChevronRight className="w-4 h-4" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCurrentPage(totalPages)}
+                    disabled={currentPage >= totalPages || totalPages === 0}
+                    className="h-8 w-8 p-0"
+                  >
+                    <ChevronsRight className="w-4 h-4" />
                   </Button>
                 </div>
               </div>
@@ -423,23 +497,21 @@ const Vendas = () => {
       </div>
 
       {/* --- MODAIS --- */}
-      
-      {/* 1. Preview de Vendas */}
       <ImportPreviewModal
         open={previewModalOpen}
         onOpenChange={setPreviewModalOpen}
         data={previewData}
-        loading={false}
-        onRemoveItem={(idx) => setPreviewData((prev) => prev.filter((_, i) => i !== idx))}
+        loading={isConfirmingImport} // Corrigido: Prop loading adicionada
+        onRemoveItem={(idx) =>
+          setPreviewData((prev) => prev.filter((_, i) => i !== idx))
+        }
         onConfirm={() => {
-          const stores = [...new Set(previewData.map((i) => i.loja))];
-          setUniqueStores(stores);
+          setUniqueStores([...new Set(previewData.map((i) => i.loja))]);
           setPreviewModalOpen(false);
           setMappingModalOpen(true);
         }}
       />
 
-      {/* 2. Mapeamento de Lojas (Só para Vendas) */}
       <StoreMappingModal
         open={mappingModalOpen}
         uniqueStores={uniqueStores}
@@ -451,17 +523,29 @@ const Vendas = () => {
         }}
       />
 
-      {/* 3. Preview de Pagamentos */}
-      <PaymentImportModal 
+      <PaymentImportModal
         open={paymentModalOpen}
         onOpenChange={setPaymentModalOpen}
         data={paymentPreviewData}
         loading={isConfirmingImport}
-        onRemoveItem={(idx) => setPaymentPreviewData((prev) => prev.filter((_, i) => i !== idx))}
+        onRemoveItem={(idx) =>
+          setPaymentPreviewData((prev) => prev.filter((_, i) => i !== idx))
+        }
         onConfirm={handleFinalizeImportPagamento}
       />
 
-      {/* 4. Modal de Edição/Criação Manual */}
+      <OperationImportModal
+        open={operationModalOpen}
+        onOpenChange={setOperationModalOpen}
+        data={operationPreviewData}
+        type={importType === "reembolso" ? "reembolso" : "devolucao"}
+        loading={isConfirmingImport}
+        onRemoveItem={(idx) =>
+          setOperationPreviewData((prev) => prev.filter((_, i) => i !== idx))
+        }
+        onConfirm={handleFinalizeOperation}
+      />
+
       <VendaModal
         open={modalOpen}
         onOpenChange={setModalOpen}
