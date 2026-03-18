@@ -17,55 +17,61 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-
-// Mapeamento de Motivos conforme as imagens fornecidas
-const MOTIVOS_MAP: Record<number, string> = {
-  1: "ARREPENDIMENTO", 2: "AVARIA", 3: "CANCELADO POR NÓS", 4: "CLIENTE COMPROU ERRADO",
-  5: "DESISTÊNCIA CLIENTE", 6: "DESISTÊNCIA DO CLIENTE", 7: "ETIQUETA TROCADA",
-  8: "FALHA NA ENTREGA", 9: "FALHA NA OPERAÇÃO", 10: "IRREGULARIDADES NA OPERAÇÃO",
-  11: "ITEM AVARIADO", 12: "ITEM FALTANTE", 13: "ITEM INCORRETO", 14: "ITEM TROCADO",
-  15: "LÍQUIDO DERRAMADO", 16: "NÃO IDENTIFICADO", 17: "ORIGINALIDADE",
-  18: "PEDIDO ERRADO", 19: "TROCA DE ETIQUETA"
-};
+import { useState } from "react";
 
 interface OperationImportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: any[];
-  onConfirm: () => void;
+  onConfirm: (dataRepasse: string) => void;
   loading: boolean;
   onRemoveItem: (index: number) => void;
-  type: 'reembolso' | 'devolucao'; // Define o comportamento do modal
+  type: "reembolso" | "devolucao";
 }
 
-export function OperationImportModal({ 
-  open, 
-  onOpenChange, 
-  data, 
-  onConfirm, 
-  loading, 
+export function OperationImportModal({
+  open,
+  onOpenChange,
+  data,
+  onConfirm,
+  loading,
   onRemoveItem,
-  type 
+  type,
 }: OperationImportModalProps) {
-  
-  // Configurações dinâmicas baseadas no tipo
-  const isRefund = type === 'reembolso';
-  
+  const [dataRepasse, setDataRepasse] = useState(
+    new Date().toISOString().split("T")[0],
+  );
+  const isRefund = type === "reembolso";
+
   const config = {
     title: isRefund ? "Importação de Reembolsos" : "Importação de Devoluções",
-    description: isRefund ? "Revise os valores que serão debitados." : "Confirme as notas que retornaram ao estoque.",
-    labelTotal: isRefund ? "Total a Reembolsar" : "Total em Devolução",
-    btnConfirm: isRefund ? "Confirmar Reembolsos" : "Confirmar Devoluções",
+    description: isRefund
+      ? "Confirme os valores de repasse e comissões do reembolso."
+      : "Confirme os dados e motivos das devoluções.",
+    labelTotal: isRefund ? "Total Repasse" : "Total Devolução",
+    btnConfirm: "Avançar para Vínculo",
     colorClass: isRefund ? "bg-rose-50/50" : "bg-amber-50/50",
-    iconClass: isRefund ? "bg-rose-100 text-rose-600" : "bg-amber-100 text-amber-600",
+    iconClass: isRefund
+      ? "bg-rose-100 text-rose-600"
+      : "bg-amber-100 text-amber-600",
     textClass: isRefund ? "text-rose-700" : "text-amber-700",
     accentClass: isRefund ? "text-rose-600" : "text-amber-600",
-    btnClass: isRefund ? "bg-rose-600 hover:bg-rose-700" : "bg-amber-600 hover:bg-amber-700",
-    Icon: isRefund ? Banknote : RotateCcw
+    btnClass: isRefund
+      ? "bg-rose-600 hover:bg-rose-700"
+      : "bg-amber-600 hover:bg-amber-700",
+    Icon: isRefund ? Banknote : RotateCcw,
   };
 
-  const totalValue = data.reduce((acc, item) => acc + (Number(item.valor) || 0), 0);
-  const formatCurrency = (v: number) => new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v);
+  const totalValue = data.reduce((acc, item) => {
+    const val = isRefund ? (item.repasse ?? 0) : (item.valor ?? 0);
+    return acc + (Number(val) || 0);
+  }, 0);
+
+  const formatCurrency = (v: number) =>
+    new Intl.NumberFormat("pt-BR", {
+      style: "currency",
+      currency: "BRL",
+    }).format(v);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -82,8 +88,12 @@ export function OperationImportModal({
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[10px] text-muted-foreground uppercase font-bold">{config.labelTotal}</p>
-              <p className={`text-lg font-bold ${config.textClass}`}>{formatCurrency(totalValue)}</p>
+              <p className="text-[10px] text-muted-foreground uppercase font-bold">
+                {config.labelTotal}
+              </p>
+              <p className={`text-lg font-bold ${config.textClass}`}>
+                {formatCurrency(totalValue)}
+              </p>
             </div>
           </div>
         </DialogHeader>
@@ -93,36 +103,127 @@ export function OperationImportModal({
             <div className="border rounded-lg overflow-hidden">
               <Table>
                 <TableHeader className="bg-slate-100">
-                  <TableRow>
-                    <TableHead className="font-bold">NOTA</TableHead>
-                    <TableHead className="font-bold">LOJA</TableHead>
-                    <TableHead className="font-bold">DATA</TableHead>
-                    <TableHead className="font-bold">MOTIVO</TableHead>
-                    <TableHead className={`font-bold text-right ${config.accentClass}`}>VALOR</TableHead>
-                    <TableHead className="w-[50px]"></TableHead>
-                  </TableRow>
+                  {isRefund ? (
+                    <TableRow>
+                      <TableHead className="font-bold">NOTA</TableHead>
+                      <TableHead className="font-bold">LOJA</TableHead>
+                      <TableHead className="font-bold text-center">
+                        PARCELA
+                      </TableHead>
+                      <TableHead className="font-bold text-right">
+                        BASE ICMS
+                      </TableHead>
+                      <TableHead className="font-bold text-right">
+                        COM. VENDA
+                      </TableHead>
+                      <TableHead className="font-bold text-right">
+                        COM. FRETE
+                      </TableHead>
+                      <TableHead
+                        className={`font-bold text-right ${config.accentClass}`}
+                      >
+                        REPASSE
+                      </TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  ) : (
+                    <TableRow>
+                      <TableHead className="font-bold">NF</TableHead>
+                      <TableHead className="font-bold">LOJA</TableHead>
+                      <TableHead className="font-bold text-center">
+                        DEVOLUÇÃO
+                      </TableHead>
+                      <TableHead className="font-bold text-center">
+                        TRATATIVA
+                      </TableHead>
+                      <TableHead className="font-bold text-center">
+                        MOTIVO
+                      </TableHead>
+                      <TableHead className="font-bold text-right">
+                        BASE
+                      </TableHead>
+                      <TableHead className="font-bold text-right">
+                        SALDO
+                      </TableHead>
+                      <TableHead
+                        className={`font-bold text-right ${config.accentClass}`}
+                      >
+                        VALOR
+                      </TableHead>
+                      <TableHead className="w-[50px]"></TableHead>
+                    </TableRow>
+                  )}
                 </TableHeader>
                 <TableBody>
                   {data.map((item, idx) => (
                     <TableRow key={idx} className="hover:bg-slate-50">
-                      <TableCell className="font-medium font-mono">#{item.nota}</TableCell>
-                      <TableCell className="text-xs uppercase font-semibold">{item.loja}</TableCell>
-                      <TableCell className="text-xs">
-                         <div className="flex items-center gap-1">
-                          <Calendar className="w-3 h-3 text-slate-400" />
-                          {item.data}
-                        </div>
-                      </TableCell>
+                      {isRefund ? (
+                        <>
+                          <TableCell className="font-medium font-mono">
+                            #{item.nota}
+                          </TableCell>
+                          <TableCell className="text-xs uppercase font-semibold">
+                            {item.loja}
+                          </TableCell>
+                          <TableCell className="text-center text-xs whitespace-nowrap">
+                            {item.parcelaPaga} / {item.parcelas}
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatCurrency(item.baseIcms)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(item.comissaoVenda)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(item.comissaoFrete)}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-bold ${config.accentClass}`}
+                          >
+                            {formatCurrency(item.repasse)}
+                          </TableCell>
+                        </>
+                      ) : (
+                        <>
+                          <TableCell className="font-medium font-mono">
+                            #{item.nf}
+                          </TableCell>
+                          <TableCell className="text-xs uppercase font-semibold">
+                            {item.loja}
+                          </TableCell>
+                          <TableCell className="text-center text-xs">
+                            {item.devolucao || "-"}
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-[10px] px-2 py-1 rounded font-bold border bg-slate-100 text-slate-700">
+                              {item.tratativa}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-[10px] px-2 py-1 rounded font-bold border bg-amber-100 text-amber-800 border-amber-200">
+                              {item.motivo}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-right text-muted-foreground">
+                            {formatCurrency(item.baseIcms)}
+                          </TableCell>
+                          <TableCell className="text-right">
+                            {formatCurrency(item.saldo)}
+                          </TableCell>
+                          <TableCell
+                            className={`text-right font-bold ${config.accentClass}`}
+                          >
+                            {formatCurrency(item.valor)}
+                          </TableCell>
+                        </>
+                      )}
                       <TableCell>
-                        <span className={`text-[10px] px-2 py-1 rounded font-bold border ${isRefund ? 'bg-slate-100 text-slate-700' : 'bg-amber-100 text-amber-800 border-amber-200'}`}>
-                          {MOTIVOS_MAP[item.motivo] || `ID ${item.motivo}`}
-                        </span>
-                      </TableCell>
-                      <TableCell className={`text-right font-bold ${config.accentClass}`}>
-                        {formatCurrency(item.valor)}
-                      </TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="icon" onClick={() => onRemoveItem(idx)} className="h-8 w-8 hover:text-red-600">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => onRemoveItem(idx)}
+                          className="h-8 w-8 hover:text-red-600"
+                        >
                           <Trash2 className="w-4 h-4" />
                         </Button>
                       </TableCell>
@@ -134,18 +235,47 @@ export function OperationImportModal({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="p-4 border-t bg-slate-50">
-          <div className="mr-auto self-center">
-            <span className="text-sm font-medium text-slate-500">{data.length} itens detectados</span>
+        <DialogFooter className="p-4 border-t bg-slate-50 flex items-center justify-between gap-4">
+          <div className="flex-1">
+            <span className="text-sm font-medium text-slate-500">
+              {data.length} itens detectados
+            </span>
           </div>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>Cancelar</Button>
-          <Button 
-            onClick={onConfirm} 
-            disabled={loading || data.length === 0} 
-            className={`${config.btnClass} text-white transition-all active:scale-95`}
-          >
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : config.btnConfirm}
-          </Button>
+          <div className="flex flex-row items-center gap-2 border-x px-4">
+            <label
+              htmlFor="data-op"
+              className="text-[10px] uppercase font-bold text-slate-500 flex items-center gap-1"
+            >
+              <Calendar className="w-3 h-3" /> Data
+            </label>
+            <input
+              id="data-op"
+              type="date"
+              className="h-8 w-36 rounded border bg-white px-2 text-xs font-medium focus:ring-2 focus:ring-blue-500 outline-none"
+              value={dataRepasse}
+              onChange={(e) => setDataRepasse(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+          <div className="flex-1 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => onConfirm(dataRepasse)}
+              disabled={loading || data.length === 0 || !dataRepasse}
+              className={`${config.btnClass} text-white transition-all active:scale-95`}
+            >
+              {loading ? (
+                <Loader2 className="w-4 h-4 animate-spin mr-2" />
+              ) : null}
+              {config.btnConfirm}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

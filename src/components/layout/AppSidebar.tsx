@@ -8,6 +8,9 @@ import {
   Settings,
   Sparkles,
   Users,
+  User,
+  Truck,
+  ArchiveX
 } from "lucide-react";
 import {
   Sidebar,
@@ -27,7 +30,8 @@ const menuItems = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Marketplace", url: "/marketplace", icon: Store },
   { title: "Financeiro", url: "/financeiro", icon: Receipt },
-  { title: "Pagamentos", url: "/pagamentos", icon: ArrowLeftRight },
+  { title: "Frete", url: "/frete", icon: Truck },
+  { title: "Devoluções", url: "/devolucoes", icon: ArchiveX },
 ];
 
 const adminMenuItems = [
@@ -115,17 +119,17 @@ export function AppSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="p-4">
-        <div className=" rounded-xl p-4 bg-white">
+      <SidebarFooter className="">
+        <div className=" rounded-xl p-4 bg-gray-100">
           <div className="flex items-center gap-3">
             <div className="w-8 h-8 rounded-full bg-sidebar-primary/20 flex items-center justify-center">
-              <Settings className="w-4 h-4 text-sidebar-primary" />
+              <User className="w-4 h-4 text-sidebar-primary" />
             </div>
             <div className="flex flex-col">
-              <span className="text-sm font-medium text-sidebar-foreground">
+              <span className="text-sm font-medium text-gray-900">
                 {user?.name || "Usuário"}
               </span>
-              <span className="text-xs text-sidebar-foreground/50 capitalize">
+              <span className="text-xs text-gray-900 capitalize">
                 {user?.role || "funcionario"}
               </span>
             </div>

@@ -1,12 +1,20 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef, useMemo, useEffect } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
   Upload,
   Loader2,
   AlertCircle,
+  Download,
+  XCircle,
   CheckCircle2,
-  FileText,
+  Clock,
+  Receipt,
+  SearchX,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -14,40 +22,197 @@ import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { FretePreviewModal } from "@/components/ui/FreteModalPreview";
+import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { vendaService } from "@/services/api-routes";
 
-// Modal de Preview que criaremos abaixo
+// --- TIPAGENS ---
+interface VendaFrete {
+  id: string;
+  nf: string | number;
+  loja: string;
+  marketplaceId: string;
+  fretePago: boolean;
+  NumeroFatura?: string | null;
+}
+
+interface FreteError {
+  nf: string;
+  loja: string;
+  fatura: string;
+  motivo: "NÃO ENCONTRADO" | "JÁ PAGO" | "ERRO DESCONHECIDO";
+}
 
 const Frete = () => {
+  // --- ESTADOS DE DADOS ---
+  const [vendas, setVendas] = useState<VendaFrete[]>([]);
   const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<any[]>([]); // Dados do banco
+  
+  // --- ESTADOS DE ERRO (Pós-Importação) ---
+  const [importErrors, setImportErrors] = useState<FreteError[]>([]);
+  const [errorStoreFilter, setErrorStoreFilter] = useState<string>("all");
+
+  // --- ESTADOS DA TABELA PRINCIPAL ---
+  const [searchNf, setSearchNf] = useState("");
+  const [statusFilter, setStatusFilter] = useState<"all" | "pendente" | "pago">("all");
+
+  // --- ESTADOS DE PAGINAÇÃO ---
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+
+  // --- ESTADOS DE IMPORTAÇÃO ---
   const [previewData, setPreviewData] = useState<any[] | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Colunas da Tabela Principal
+  // =======================================================================
+  // 1. CARREGAMENTO INICIAL
+  // =======================================================================
+  const fetchVendas = async () => {
+    setLoading(true);
+    try {
+      const data = await vendaService.getAllFrete();
+      setVendas(data);
+    } catch (error) {
+      toast.error("Erro ao carregar vendas de frete.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchVendas();
+  }, []);
+
+  // =======================================================================
+  // 2. FILTROS E PAGINAÇÃO
+  // =======================================================================
+  const filteredVendas = useMemo(() => {
+    return vendas.filter((v) => {
+      const nfString = String(v.nf || "").toLowerCase();
+      const matchesSearch = nfString.includes(searchNf.toLowerCase());
+      const isPago = v.fretePago;
+
+      const matchesStatus =
+        statusFilter === "all" ||
+        (statusFilter === "pago" && isPago) ||
+        (statusFilter === "pendente" && !isPago);
+
+      return matchesSearch && matchesStatus;
+    });
+  }, [vendas, searchNf, statusFilter]);
+
+  // Reseta a página ao buscar
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchNf, statusFilter]);
+
+  const totalPages = Math.ceil(filteredVendas.length / itemsPerPage);
+  const paginatedVendas = useMemo(() => {
+    const start = (currentPage - 1) * itemsPerPage;
+    return filteredVendas.slice(start, start + itemsPerPage);
+  }, [filteredVendas, currentPage]);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    if (endPage - startPage + 1 < maxButtons) {
+      startPage = Math.max(1, endPage - maxButtons + 1);
+    }
+    for (let i = startPage; i <= endPage; i++) {
+      if (i >= 1) pages.push(i);
+    }
+    return pages;
+  };
+
+  // =======================================================================
+  // 3. COLUNAS (NO FORMATO CUSTOMIZADO DA SUA APLICAÇÃO)
+  // =======================================================================
   const columns = [
     {
-      key: "nf", // Adicione a propriedade key
-      accessorKey: "nf",
-      header: "NF",
-    },
-    {
-      key: "fatura", // Adicione a propriedade key
-      accessorKey: "fatura",
-      header: "Fatura",
-      cell: ({ row }: any) => row.original.fatura || "---",
-    },
-    {
-      key: "status", // Adicione a propriedade key
-      accessorKey: "status",
-      header: "Status",
-      cell: ({ row }: any) => (
-        <Badge variant={row.original.pago ? "default" : "secondary"}>
-          {row.original.pago ? "Pago" : "Pendente"}
-        </Badge>
+      key: "nf",
+      header: () => <div className="text-left font-semibold text-slate-700">Nota Fiscal</div>,
+      render: (v: any) => (
+        <span className="font-medium font-mono text-slate-700 text-sm bg-slate-100 px-2 py-1 rounded border border-slate-200">
+          #{v.nf || "S/N"}
+        </span>
       ),
+    },
+    {
+      key: "loja",
+      header: () => <div className="text-left font-semibold text-slate-700">Loja</div>,
+      render: (v: any) => (
+        <span className="text-xs font-bold text-slate-700 uppercase tracking-tight">
+          {v.loja}
+        </span>
+      ),
+    },
+    {
+      key: "NumeroFatura",
+      header: () => <div className="text-left font-semibold text-slate-700">Fatura</div>,
+      render: (v: any) => {
+        const fatura = v.NumeroFatura;
+        return fatura ? (
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 bg-blue-50 border border-blue-100 text-blue-600 rounded-md shadow-sm">
+              <Receipt className="w-3.5 h-3.5" />
+            </div>
+            <span className="font-mono font-bold text-slate-700 tracking-tight">
+              {fatura}
+            </span>
+          </div>
+        ) : (
+          <div className="flex items-center gap-1.5 text-slate-400 bg-slate-50 border border-slate-200 px-2.5 py-1 rounded-full w-fit">
+            <SearchX className="w-3.5 h-3.5" />
+            <span className="text-[10px] font-bold uppercase tracking-wider">
+              Aguardando
+            </span>
+          </div>
+        );
+      },
+    },
+    {
+      key: "statusFrete",
+      header: () => <div className="text-left font-semibold text-slate-700">Status do Frete</div>,
+      render: (v: any) => {
+        const isPago = v.fretePago;
+        return (
+          <Badge
+            variant="outline"
+            className={
+              isPago
+                ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 flex items-center gap-1.5 w-fit px-2.5 py-1"
+                : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 flex items-center gap-1.5 w-fit px-2.5 py-1"
+            }
+          >
+            {isPago ? (
+              <>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+                <span>Pago</span>
+              </>
+            ) : (
+              <>
+                <Clock className="w-3.5 h-3.5" />
+                <span>Pendente</span>
+              </>
+            )}
+          </Badge>
+        );
+      },
     },
   ];
 
+  // =======================================================================
+  // 4. FLUXO DE IMPORTAÇÃO E PREVIEW
+  // =======================================================================
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -60,80 +225,283 @@ const Frete = () => {
         const ws = wb.Sheets[wb.SheetNames[0]];
         const rawData: any[] = XLSX.utils.sheet_to_json(ws);
 
-        // Simulação de Validação: Aqui você compararia com seu banco de dados
-        const processed = rawData.map((row: any) => {
-          const nfStr = String(row.NF || row.nf || "");
-          const existeNoBanco = data.find((v) => v.nf === nfStr);
+        if (!rawData.length) {
+          toast.warning("Planilha vazia.");
+          return;
+        }
 
-          return {
-            nf: nfStr,
-            fatura: row.FATURA || row.fatura || "",
-            jaPago: existeNoBanco?.pago || false,
-            encontrado: !!existeNoBanco,
-          };
-        });
+        const processed = rawData.map((row: any) => ({
+          nf: String(row.NOTA || row.NF || row.nf || "").trim(),
+          fatura: String(row.FATURA || row.fatura || "").trim(),
+          loja: String(row.LOJA || row.loja || "DESCONHECIDA").trim(),
+        }));
 
         setPreviewData(processed);
       } catch (err) {
         toast.error("Erro ao ler planilha de frete.");
+      } finally {
+        if (fileInputRef.current) fileInputRef.current.value = "";
       }
     };
     reader.readAsBinaryString(file);
   };
 
+ const handleConfirmImport = async () => {
+    setIsProcessing(true);
+    setImportErrors([]);
+
+    try {
+      // Chamada real para a API:
+      const response = await vendaService.importFretes(previewData!);
+      const { successCount, errors } = response;
+
+      if (successCount > 0) {
+        toast.success(`${successCount} faturas de frete processadas!`);
+        fetchVendas(); // Atualiza a tabela
+      }
+
+      if (errors && errors.length > 0) {
+        toast.error(`${errors.length} notas apresentaram problemas.`);
+        setImportErrors(errors);
+      }
+
+      setPreviewData(null);
+    } catch (error) {
+      toast.error("Falha ao processar importação.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  // =======================================================================
+  // 5. LÓGICA DA TABELA DE ERROS
+  // =======================================================================
+  const filteredErrors = useMemo(() => {
+    return importErrors.filter(
+      (err) => errorStoreFilter === "all" || err.loja === errorStoreFilter,
+    );
+  }, [importErrors, errorStoreFilter]);
+
+  const uniqueErrorStores = useMemo(() => {
+    return Array.from(new Set(importErrors.map((e) => e.loja)));
+  }, [importErrors]);
+
+  const exportErrorsToCSV = () => {
+    const ws = XLSX.utils.json_to_sheet(filteredErrors);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "Erros de Frete");
+    XLSX.writeFile(wb, `Erros_Frete_${new Date().getTime()}.xlsx`);
+  };
+
   return (
     <AppLayout title="Conciliação de Frete">
       <div className="space-y-6">
-        <div className="flex justify-between items-center">
+        {/* --- HEADER --- */}
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border shadow-sm">
           <div>
-            <h2 className="text-2xl font-bold tracking-tight">
+            <h2 className="text-2xl font-bold tracking-tight text-slate-900">
               Gestão de Fretes
             </h2>
-            <p className="text-muted-foreground">
-              Importe suas faturas de frete para conciliação.
+            <p className="text-sm text-slate-500 mt-1">
+              Visualize faturas pendentes ou importe planilhas para dar baixa.
             </p>
           </div>
 
           <Button
             onClick={() => fileInputRef.current?.click()}
-            className="gap-2"
+            className="gap-2 bg-blue-600 hover:bg-blue-700"
+            disabled={loading || isProcessing}
           >
-            <Upload className="w-4 h-4" />
-            Subir Planilha Frete
+            {isProcessing ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Upload className="w-4 h-4" />
+            )}
+            Importar Faturas (Excel)
           </Button>
-
           <input
             type="file"
             ref={fileInputRef}
             className="hidden"
-            accept=".xlsx, .xls"
+            accept=".xlsx, .xls, .csv"
             onChange={handleFileUpload}
           />
         </div>
 
-        {/* Tabela Principal */}
-        <div className="bg-white border rounded-xl shadow-sm">
-          <DataTable
-            columns={columns}
-            data={data}
-            // emptyMessage="Nenhum frete registrado ainda."
+        {/* --- TABELA TEMPORÁRIA DE ERROS --- */}
+        {importErrors.length > 0 && (
+          <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-top-4">
+            <div className="p-4 bg-red-100 border-b border-red-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+              <div className="flex items-center gap-2 text-red-800">
+                <AlertCircle className="w-5 h-5" />
+                <h3 className="font-bold">
+                  Atenção: {importErrors.length} notas não puderam ser processadas
+                </h3>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <Select value={errorStoreFilter} onValueChange={setErrorStoreFilter}>
+                  <SelectTrigger className="w-[180px] bg-white border-red-200 h-9">
+                    <SelectValue placeholder="Filtrar por Loja" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">Todas as Lojas</SelectItem>
+                    {uniqueErrorStores.map((loja) => (
+                      <SelectItem key={loja} value={loja}>
+                        {loja}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Button variant="outline" size="sm" onClick={exportErrorsToCSV} className="bg-white border-red-200 text-red-700 hover:bg-red-50 h-9">
+                  <Download className="w-4 h-4 mr-2" /> Exportar Erros
+                </Button>
+
+                <Button variant="ghost" size="icon" onClick={() => setImportErrors([])} className="text-red-600 hover:bg-red-200 h-9 w-9">
+                  <XCircle className="w-5 h-5" />
+                </Button>
+              </div>
+            </div>
+
+            <div className="p-0 overflow-auto max-h-[300px]">
+              <table className="w-full text-sm text-left text-red-900">
+                <thead className="text-xs uppercase bg-red-100/50 sticky top-0">
+                  <tr>
+                    <th className="px-6 py-3">Nota Fiscal</th>
+                    <th className="px-6 py-3">Fatura</th>
+                    <th className="px-6 py-3">Loja</th>
+                    <th className="px-6 py-3">Motivo do Erro</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredErrors.map((err, idx) => (
+                    <tr key={idx} className="border-b border-red-100 bg-white">
+                      <td className="px-6 py-3 font-medium">#{err.nf}</td>
+                      <td className="px-6 py-3">{err.fatura}</td>
+                      <td className="px-6 py-3">{err.loja}</td>
+                      <td className="px-6 py-3">
+                        <Badge variant="destructive" className="bg-red-100 text-red-800 hover:bg-red-100 border border-red-200">
+                          {err.motivo}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {filteredErrors.length === 0 && (
+                <div className="p-4 text-center text-red-600">
+                  Nenhum erro encontrado para esta loja.
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* --- FILTROS --- */}
+        <div className="flex flex-col sm:flex-row gap-4 mb-4">
+          <Input
+            placeholder="Buscar por Nota Fiscal..."
+            value={searchNf}
+            onChange={(e) => setSearchNf(e.target.value)}
+            className="max-w-xs bg-white"
           />
+          <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
+            <SelectTrigger className="w-[200px] bg-white">
+              <SelectValue placeholder="Situação do Frete" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">Todos os Status</SelectItem>
+              <SelectItem value="pendente">Pagamento Pendente</SelectItem>
+              <SelectItem value="pago">Frete Pago</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* --- TABELA PRINCIPAL COM PAGINAÇÃO --- */}
+        <div className="bg-white border rounded-xl shadow-sm min-h-[400px] flex flex-col overflow-hidden">
+          {loading ? (
+            <div className="flex-1 flex justify-center items-center">
+              <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+            </div>
+          ) : (
+            <>
+              <div className="flex-1 overflow-auto">
+                <DataTable columns={columns} data={paginatedVendas} />
+              </div>
+              
+              {/* Rodapé da Paginação */}
+              <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50">
+                <span className="text-sm text-slate-500 font-medium">
+                  Mostrando {paginatedVendas.length} de {filteredVendas.length} registros
+                </span>
+                
+                {totalPages > 1 && (
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(1)}
+                      disabled={currentPage === 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronsLeft className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </Button>
+                    <div className="flex gap-1 mx-2">
+                      {getPageNumbers().map((num) => (
+                        <Button
+                          key={num}
+                          variant={currentPage === num ? "default" : "outline"}
+                          size="sm"
+                          onClick={() => setCurrentPage(num)}
+                          className={`h-8 w-8 p-0 text-xs ${currentPage === num ? "bg-slate-900 text-white" : ""}`}
+                        >
+                          {num}
+                        </Button>
+                      ))}
+                    </div>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage >= totalPages}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setCurrentPage(totalPages)}
+                      disabled={currentPage >= totalPages || totalPages === 0}
+                      className="h-8 w-8 p-0"
+                    >
+                      <ChevronsRight className="w-4 h-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
         </div>
       </div>
 
-      {/* Modal de Validação/Preview */}
+      {/* --- MODAL DE PREVIEW --- */}
       {previewData && (
         <FretePreviewModal
           data={previewData}
-          onClose={() => {
-            setPreviewData(null);
-            if (fileInputRef.current) fileInputRef.current.value = "";
-          }}
-          onConfirm={async () => {
-            // Lógica para salvar no banco
-            toast.success("Fretes processados com sucesso!");
-            setPreviewData(null);
-          }}
+          onClose={() => setPreviewData(null)}
+          onConfirm={handleConfirmImport}
+          loading={isProcessing}
         />
       )}
     </AppLayout>

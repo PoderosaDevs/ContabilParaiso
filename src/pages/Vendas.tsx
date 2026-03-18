@@ -13,64 +13,56 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 
-// Modais
 import { ImportPreviewModal } from "@/components/vendas/ImportVendaModal";
 import { StoreMappingModal } from "@/components/vendas/StoreMappingModal";
 import { VendaModal } from "@/components/modals/VendaModal";
 import { PaymentImportModal } from "@/components/vendas/PaymentImportModal";
 import { OperationImportModal } from "@/components/vendas/OperationImportModal";
 
-// Serviços e Colunas
 import {
   vendaService,
   marketplaceService,
   pagamentoService,
+  transferenciaService,
 } from "@/services/api-routes";
 import { getVendasColumns } from "@/components/vendas/columns";
 import { VendasHeader } from "@/components/vendas/VendasHeader";
 import { VendasStats } from "@/components/vendas/VendasStats";
 
 const Vendas = () => {
-  // --- ESTADOS DE DADOS ---
   const [vendas, setVendas] = useState<any[]>([]);
   const [marketplaces, setMarketplaces] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- ESTADOS DE CONTROLE ---
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [marketplaceFilter, setMarketplaceFilter] = useState("all");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-  // --- ESTADOS DE IMPORTAÇÃO ---
   const [importType, setImportType] = useState<
     "venda" | "pagamento" | "reembolso" | "devolucao"
   >("venda");
   const [isConfirmingImport, setIsConfirmingImport] = useState(false);
+  const [pendingDataRepasse, setPendingDataRepasse] = useState<string>("");
 
-  // Dados de Preview
   const [previewData, setPreviewData] = useState<any[]>([]);
   const [paymentPreviewData, setPaymentPreviewData] = useState<any[]>([]);
   const [operationPreviewData, setOperationPreviewData] = useState<any[]>([]);
 
-  // Controle de Modais
   const [previewModalOpen, setPreviewModalOpen] = useState(false);
   const [paymentModalOpen, setPaymentModalOpen] = useState(false);
   const [operationModalOpen, setOperationModalOpen] = useState(false);
   const [mappingModalOpen, setMappingModalOpen] = useState(false);
   const [uniqueStores, setUniqueStores] = useState<string[]>([]);
 
-  // Modal de Edição/Criação Manual
   const [modalOpen, setModalOpen] = useState(false);
   const [editingVenda, setEditingVenda] = useState<any | null>(null);
 
-  // --- FILTROS ---
   const [statusFilter, setStatusFilter] = useState("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
-  // --- CARREGAMENTO INICIAL ---
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -91,7 +83,6 @@ const Vendas = () => {
     fetchData();
   }, []);
 
-  // --- LÓGICA DE FILTRAGEM ---
   const filteredVendas = useMemo(() => {
     return vendas.filter((v) => {
       const searchLower = search.toLowerCase();
@@ -119,15 +110,11 @@ const Vendas = () => {
     });
   }, [vendas, search, marketplaceFilter, statusFilter, startDate, endDate]);
 
-  // --- ESTATÍSTICAS ---
   const stats = useMemo(() => {
-    // 1. Total Base ICMS (Receita Prevista)
     const totalBaseIcms = filteredVendas.reduce(
       (acc, v) => acc + Number(v.baseIcms || 0),
       0,
     );
-
-    // 2. Total Recebido (Soma dos pagamentos vinculados)
     const totalRecebido = filteredVendas.reduce((acc, v) => {
       const pagos =
         v.pagamentos?.reduce(
@@ -136,10 +123,11 @@ const Vendas = () => {
         ) || 0;
       return acc + pagos;
     }, 0);
-
-    // 3. Total de Taxas (Soma de Comissão Venda + Comissão Frete)
     const totalTaxas = filteredVendas.reduce((acc, v) => {
-      const taxas = Number(v.comissaoVenda || 0) + Number(v.comissaoFrete || 0);
+      const taxas =
+        Number(v.comissaoVenda || 0) +
+        Number(v.comissaoFrete || 0) +
+        Number(v.frete_e_taxas || 0);
       return acc + taxas;
     }, 0);
 
@@ -147,11 +135,10 @@ const Vendas = () => {
       count: filteredVendas.length,
       totalBaseIcms,
       totalRecebido,
-      totalTaxas, // Novo campo para o seu VendasStats
+      totalTaxas,
     };
   }, [filteredVendas]);
 
-  // --- PAGINAÇÃO ---
   const totalPages = Math.ceil(filteredVendas.length / itemsPerPage);
   const paginatedVendas = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
@@ -175,7 +162,6 @@ const Vendas = () => {
     setCurrentPage(1);
   }, [search, marketplaceFilter, statusFilter, startDate, endDate]);
 
-  // --- IMPORTAÇÃO ---
   const handleTriggerImport = (
     type: "venda" | "pagamento" | "reembolso" | "devolucao",
   ) => {
@@ -259,26 +245,40 @@ const Vendas = () => {
             repasse: parseNum(getVal(item, ["REPASSE", "VALOR", "LIQUIDO"])),
             comissaoVenda: parseNum(getVal(item, ["COMISSÃO VENDA"])),
             comissaoFrete: parseNum(getVal(item, ["COMISSÃO FRETE"])),
+            frete_e_taxas: parseNum(getVal(item, ["FRETES E TARIFAS"])),
             baseIcms: parseNum(getVal(item, ["BASE ICMS"])),
             parcelaPaga: parseInt(String(getVal(item, ["PARCELA PAGA"]))) || 1,
             parcelas: parseInt(String(getVal(item, ["PARCELAS"]))) || 1,
           }));
           setPaymentPreviewData(mapped);
           setPaymentModalOpen(true);
-        } else if (importType === "reembolso" || importType === "devolucao") {
+        } else if (importType === "reembolso") {
           const mapped = rawData.map((item: any) => ({
             nota: String(getVal(item, ["NOTA", "NF"]) || "???").trim(),
-            loja: String(
-              getVal(item, ["LOJA", "CLIENTE"]) || "DESCONHECIDA",
-            ).trim(),
-            data:
-              typeof getVal(item, ["DATA"]) === "number"
-                ? excelDateToJS(getVal(item, ["DATA"]))
-                : getVal(item, ["DATA"]),
-            valor: parseNum(
-              getVal(item, ["VALOR", "TOTAL", "DEVOLUCAO", "REEMBOLSO"]),
+            parcelaPaga: parseInt(String(getVal(item, ["PARCELA PAGA"]))) || 1,
+            parcelas: parseInt(String(getVal(item, ["PARCELAS"]))) || 1,
+            repasse: parseNum(getVal(item, ["REPASSE"])),
+            comissaoVenda: parseNum(
+              getVal(item, ["COMISSAO VENDA", "COMISSÃO VENDA"]),
             ),
-            motivo: parseInt(String(getVal(item, ["MOTIVO", "ID"]))) || 16,
+            comissaoFrete: parseNum(
+              getVal(item, ["COMISSAO FRETE", "COMISSÃO FRETE"]),
+            ),
+            baseIcms: parseNum(getVal(item, ["BASE ICMS"])),
+            loja: String(getVal(item, ["LOJA"]) || "DESCONHECIDA").trim(),
+          }));
+          setOperationPreviewData(mapped);
+          setOperationModalOpen(true);
+        } else if (importType === "devolucao") {
+          const mapped = rawData.map((item: any) => ({
+            nf: String(getVal(item, ["NF", "NOTA"]) || "???").trim(),
+            baseIcms: parseNum(getVal(item, ["BASE", "BASE ICMS"])),
+            devolucao: String(getVal(item, ["DEVOLUCAO", "DEVOLUÇÃO"]) || ""),
+            valor: parseNum(getVal(item, ["VALOR"])),
+            saldo: parseNum(getVal(item, ["SALDO"])),
+            tratativa: String(getVal(item, ["TRATATIVA"]) || ""),
+            motivo: String(getVal(item, ["MOTIVO"]) || ""),
+            loja: String(getVal(item, ["LOJA"]) || "DESCONHECIDA").trim(),
           }));
           setOperationPreviewData(mapped);
           setOperationModalOpen(true);
@@ -290,7 +290,20 @@ const Vendas = () => {
     reader.readAsBinaryString(file);
   };
 
-  // --- FINALIZAÇÃO ---
+  const handleMappingCancel = () => {
+    setMappingModalOpen(false);
+    if (importType === "venda") setPreviewModalOpen(true);
+    else if (importType === "pagamento") setPaymentModalOpen(true);
+    else setOperationModalOpen(true);
+  };
+
+  const handleMappingConfirm = (mappings: any[]) => {
+    if (importType === "venda") handleFinalizeImportVenda(mappings);
+    else if (importType === "pagamento")
+      handleFinalizeImportPagamento(mappings);
+    else handleFinalizeOperation(mappings);
+  };
+
   const handleFinalizeImportVenda = async (mappings: any[]) => {
     setIsConfirmingImport(true);
     try {
@@ -305,18 +318,25 @@ const Vendas = () => {
       setMappingModalOpen(false);
       fetchData();
     } catch {
-      toast.error("Erro na importação.");
+      toast.error("Erro na importação de vendas.");
     } finally {
       setIsConfirmingImport(false);
     }
   };
 
-  const handleFinalizeImportPagamento = async () => {
+  const handleFinalizeImportPagamento = async (mappings: any[]) => {
     setIsConfirmingImport(true);
     try {
-      await pagamentoService.importBulk(paymentPreviewData);
+      const dadosFormatados = paymentPreviewData.map((pagamento) => ({
+        ...pagamento,
+        data: pendingDataRepasse,
+        marketplaceId:
+          mappings.find((m) => m.storeName === pagamento.loja)?.marketplaceId ||
+          null,
+      }));
+      await pagamentoService.importBulk(dadosFormatados);
       toast.success("Pagamentos salvos!");
-      setPaymentModalOpen(false);
+      setMappingModalOpen(false);
       fetchData();
     } catch {
       toast.error("Erro nos pagamentos.");
@@ -325,18 +345,24 @@ const Vendas = () => {
     }
   };
 
-  const handleFinalizeOperation = async () => {
+  const handleFinalizeOperation = async (mappings: any[]) => {
     setIsConfirmingImport(true);
     try {
+      const payload = operationPreviewData.map((op) => ({
+        ...op,
+        data: pendingDataRepasse,
+        marketplaceId:
+          mappings.find((m) => m.storeName === op.loja)?.marketplaceId || null,
+      }));
       const service =
         importType === "reembolso"
-          ? vendaService.importRefunds
-          : vendaService.importReturns;
-      await service(operationPreviewData);
+          ? transferenciaService.importReembolsos
+          : transferenciaService.importDevolucoes;
+      await service(payload);
       toast.success(
         `${importType === "reembolso" ? "Reembolsos" : "Devoluções"} processados!`,
       );
-      setOperationModalOpen(false);
+      setMappingModalOpen(false);
       fetchData();
     } catch {
       toast.error("Erro ao processar operação.");
@@ -345,7 +371,6 @@ const Vendas = () => {
     }
   };
 
-  // --- CRUD HANDLERS ---
   const handleSaveVenda = async (data: any) => {
     try {
       if (editingVenda) {
@@ -496,12 +521,11 @@ const Vendas = () => {
         </div>
       </div>
 
-      {/* --- MODAIS --- */}
       <ImportPreviewModal
         open={previewModalOpen}
         onOpenChange={setPreviewModalOpen}
         data={previewData}
-        loading={isConfirmingImport} // Corrigido: Prop loading adicionada
+        loading={isConfirmingImport}
         onRemoveItem={(idx) =>
           setPreviewData((prev) => prev.filter((_, i) => i !== idx))
         }
@@ -511,18 +535,6 @@ const Vendas = () => {
           setMappingModalOpen(true);
         }}
       />
-
-      <StoreMappingModal
-        open={mappingModalOpen}
-        uniqueStores={uniqueStores}
-        marketplaces={marketplaces}
-        onConfirm={handleFinalizeImportVenda}
-        onCancel={() => {
-          setMappingModalOpen(false);
-          setPreviewModalOpen(true);
-        }}
-      />
-
       <PaymentImportModal
         open={paymentModalOpen}
         onOpenChange={setPaymentModalOpen}
@@ -531,9 +543,17 @@ const Vendas = () => {
         onRemoveItem={(idx) =>
           setPaymentPreviewData((prev) => prev.filter((_, i) => i !== idx))
         }
-        onConfirm={handleFinalizeImportPagamento}
+        onConfirm={(dataRepasse) => {
+          if (!dataRepasse) {
+            toast.error("Por favor, selecione a data do repasse.");
+            return;
+          }
+          setPendingDataRepasse(dataRepasse);
+          setUniqueStores([...new Set(paymentPreviewData.map((i) => i.loja))]);
+          setPaymentModalOpen(false);
+          setMappingModalOpen(true);
+        }}
       />
-
       <OperationImportModal
         open={operationModalOpen}
         onOpenChange={setOperationModalOpen}
@@ -543,9 +563,22 @@ const Vendas = () => {
         onRemoveItem={(idx) =>
           setOperationPreviewData((prev) => prev.filter((_, i) => i !== idx))
         }
-        onConfirm={handleFinalizeOperation}
+        onConfirm={(dataRepasse) => {
+          setPendingDataRepasse(dataRepasse);
+          setUniqueStores([
+            ...new Set(operationPreviewData.map((i) => i.loja)),
+          ]);
+          setOperationModalOpen(false);
+          setMappingModalOpen(true);
+        }}
       />
-
+      <StoreMappingModal
+        open={mappingModalOpen}
+        uniqueStores={uniqueStores}
+        marketplaces={marketplaces}
+        onConfirm={handleMappingConfirm}
+        onCancel={handleMappingCancel}
+      />
       <VendaModal
         open={modalOpen}
         onOpenChange={setModalOpen}

@@ -14,6 +14,7 @@ import Register from "./pages/Register";
 import Solicitacoes from "./pages/Solicitacoes";
 import NotFound from "./pages/NotFound";
 import Frete from "./pages/Frete";
+import Devolucoes from "./pages/Devolucao";
 
 const queryClient = new QueryClient();
 
@@ -57,7 +58,7 @@ const AppRoutes = () => (
     <Route path="/marketplace" element={<ProtectedRoute><Marketplace /></ProtectedRoute>} />
     <Route path="/financeiro" element={<ProtectedRoute><Vendas /></ProtectedRoute>} />
     <Route path="/frete" element={<ProtectedRoute><Frete /></ProtectedRoute>} />
-    <Route path="/repasses" element={<ProtectedRoute><Repasses /></ProtectedRoute>} />
+    <Route path="/devolucoes" element={<ProtectedRoute><Devolucoes /></ProtectedRoute>} />
     <Route path="/solicitacoes" element={<ProtectedRoute adminOnly><Solicitacoes /></ProtectedRoute>} />
     <Route path="*" element={<NotFound />} />
   </Routes>

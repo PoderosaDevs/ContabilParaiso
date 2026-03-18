@@ -2,12 +2,8 @@ import {
   Search, 
   ChevronDown, 
   Plus, 
-  FileSpreadsheet, 
-  FileUp,
   RotateCcw,
-  Banknote,
-  X,
-  Calendar
+  X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,7 +14,7 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
 
-interface VendasHeaderProps {
+interface DevolucoesHeaderProps {
   search: string;
   onSearchChange: (value: string) => void;
   marketplaceFilter: string;
@@ -34,10 +30,10 @@ interface VendasHeaderProps {
   onClearFilters: () => void;
 
   onManualClick: () => void;
-  onImportClick: (type: 'venda' | 'pagamento' | 'reembolso' | 'devolucao') => void;
+  onImportClick: () => void; // Diferente de vendas, aqui a importação é única
 }
 
-export const VendasHeader = ({ 
+export const DevolucoesHeader = ({ 
   search, onSearchChange, 
   marketplaceFilter, onMarketplaceFilterChange, marketplaces,
   statusFilter, onStatusFilterChange,
@@ -45,14 +41,21 @@ export const VendasHeader = ({
   endDate, onEndDateChange,
   onClearFilters,
   onManualClick, onImportClick 
-}: VendasHeaderProps) => {
+}: DevolucoesHeaderProps) => {
 
   const hasActiveFilters = statusFilter !== "all" || startDate !== "" || endDate !== "" || marketplaceFilter !== "all";
 
   return (
     <div className="flex flex-col gap-4 w-full mb-6">
+      
+      {/* Cabeçalho e Ações Principais */}
       <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-         <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gerenciamento de Vendas</h1>
+         <div className="flex items-center gap-3">
+           <div className="p-2 bg-amber-100 text-amber-600 rounded-lg">
+             <RotateCcw className="w-6 h-6" />
+           </div>
+           <h1 className="text-2xl font-bold tracking-tight text-slate-900">Gerenciamento de Devoluções</h1>
+         </div>
          
          <div className="flex gap-2 w-full lg:w-auto">
             <DropdownMenu>
@@ -63,55 +66,43 @@ export const VendasHeader = ({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-64 rounded-xl p-2 shadow-xl border-slate-100">
                 <DropdownMenuItem onClick={onManualClick} className="cursor-pointer py-2.5">
-                  <Plus className="w-4 h-4 mr-2 text-blue-500" /> Nova Venda
+                  <Plus className="w-4 h-4 mr-2 text-amber-600" /> Nova Devolução Manual
                 </DropdownMenuItem>
                 
                 <DropdownMenuSeparator className="my-1" />
-                <div className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest text-center">Importação de Arquivos</div>
+                <div className="px-2 py-2 text-[10px] font-bold text-slate-400 uppercase tracking-widest">Importação em Massa</div>
                 
-                <DropdownMenuItem onClick={() => onImportClick('venda')} className="cursor-pointer py-2.5">
-                  <FileSpreadsheet className="w-4 h-4 mr-2 text-green-600" /> Planilha de Vendas
-                </DropdownMenuItem>
-                
-                <DropdownMenuItem onClick={() => onImportClick('pagamento')} className="cursor-pointer py-2.5">
-                  <FileUp className="w-4 h-4 mr-2 text-indigo-600" /> Planilha de Pagamentos
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={() => onImportClick('reembolso')} className="cursor-pointer py-2.5">
-                  <Banknote className="w-4 h-4 mr-2 text-rose-500" /> Planilha de Reembolso
-                </DropdownMenuItem>
-
-                <DropdownMenuItem onClick={() => onImportClick('devolucao')} className="cursor-pointer py-2.5">
-                  <RotateCcw className="w-4 h-4 mr-2 text-amber-600" /> Planilha de Devolução
+                <DropdownMenuItem onClick={onImportClick} className="cursor-pointer py-2.5">
+                  <RotateCcw className="w-4 h-4 mr-2 text-rose-500" /> Importar Planilha de Devoluções
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
          </div>
       </div>
 
+      {/* Barra de Filtros */}
       <div className="bg-white p-3 rounded-xl border shadow-sm flex flex-col lg:flex-row gap-3 items-center">
         <div className="relative flex-1 w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <Input 
-            placeholder="Buscar por NF, Loja..." 
+            placeholder="Buscar por NF, Loja, ou Cód. Devolução..." 
             value={search} 
             onChange={(e) => onSearchChange(e.target.value)} 
             className="pl-10 rounded-lg border-slate-200 bg-slate-50 focus:bg-white transition-all"
           />
         </div>
 
+        {/* Mantido genérico para você adaptar se preferir usar "Tratativa" no lugar de Status */}
         <Select value={statusFilter} onValueChange={onStatusFilterChange}>
           <SelectTrigger className="w-full lg:w-[160px] rounded-lg border-slate-200 bg-slate-50">
-            <SelectValue placeholder="Status" />
+            <SelectValue placeholder="Filtro" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="all">Todos Status</SelectItem>
-            <SelectItem value="PENDENTE">🕒 Pendente</SelectItem>
-            <SelectItem value="PARCIALMENTE_PAGO">🟠 Parcial</SelectItem>
-            <SelectItem value="PAGO">✅ Pago</SelectItem>
-            <SelectItem value="CANCELADO">🚫 Cancelado</SelectItem>
-            <SelectItem value="REEMBOLSADO">💸 Reembolsado</SelectItem>
-            <SelectItem value="DEVOLVIDO">📦 Devolvido</SelectItem>
+            <SelectItem value="all">Todas</SelectItem>
+            <SelectItem value="ESTORNO">Estorno</SelectItem>
+            <SelectItem value="VALE_TROCA">Vale Troca</SelectItem>
+            <SelectItem value="REUSO">Reuso de Peça</SelectItem>
+            <SelectItem value="PERDA">Perda Total</SelectItem>
           </SelectContent>
         </Select>
 
@@ -122,35 +113,29 @@ export const VendasHeader = ({
           <SelectContent>
             <SelectItem value="all">Todos Canais</SelectItem>
             {marketplaces.map((m) => (
-              <SelectItem key={m.id} value={m.id}>{m.titulo}</SelectItem>
+              <SelectItem key={m.id} value={m.id}>{m.titulo || m.nome}</SelectItem>
             ))}
           </SelectContent>
         </Select>
 
         <div className="flex items-center gap-2 w-full lg:w-auto">
-            <div className="relative">
-              <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-              <Input 
-                  type="date" 
-                  value={startDate}
-                  onChange={(e) => onStartDateChange(e.target.value)}
-                  className="w-full lg:w-32 pl-7 rounded-lg border-slate-200 bg-slate-50 text-xs h-9"
-              />
-            </div>
+            <Input 
+                type="date" 
+                value={startDate}
+                onChange={(e) => onStartDateChange(e.target.value)}
+                className="w-full lg:w-auto rounded-lg border-slate-200 bg-slate-50 text-xs"
+            />
             <span className="text-slate-400">-</span>
-            <div className="relative">
-              <Calendar className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-400 pointer-events-none" />
-              <Input 
-                  type="date" 
-                  value={endDate}
-                  onChange={(e) => onEndDateChange(e.target.value)}
-                  className="w-full lg:w-32 pl-7 rounded-lg border-slate-200 bg-slate-50 text-xs h-9"
-              />
-            </div>
+            <Input 
+                type="date" 
+                value={endDate}
+                onChange={(e) => onEndDateChange(e.target.value)}
+                className="w-full lg:w-auto rounded-lg border-slate-200 bg-slate-50 text-xs"
+            />
         </div>
 
         {hasActiveFilters && (
-            <Button variant="ghost" size="icon" onClick={onClearFilters} className="h-9 w-9 text-red-500 hover:text-red-700 hover:bg-red-50" title="Limpar Filtros">
+            <Button variant="ghost" size="icon" onClick={onClearFilters} className="text-red-500 hover:text-red-700 hover:bg-red-50 shrink-0" title="Limpar Filtros">
                 <X className="w-4 h-4" />
             </Button>
         )}

@@ -17,12 +17,13 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { useState } from "react";
 
 interface PaymentImportModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   data: any[];
-  onConfirm: () => void;
+  onConfirm: (data: string) => void;
   loading: boolean;
   onRemoveItem: (index: number) => void;
 }
@@ -35,12 +36,17 @@ export function PaymentImportModal({
   loading,
   onRemoveItem,
 }: PaymentImportModalProps) {
-  
+  const [dataRepasse, setDataRepasse] = useState(
+    new Date().toISOString().split("T")[0],
+  );
   // Cálculo de totais para conferência rápida
-  const totals = data.reduce((acc, item) => ({
-    repasse: acc.repasse + (Number(item.repasse) || 0),
-    comissao: acc.comissao + (Number(item.comissaoVenda) || 0)
-  }), { repasse: 0, comissao: 0 });
+  const totals = data.reduce(
+    (acc, item) => ({
+      repasse: acc.repasse + (Number(item.repasse) || 0),
+      comissao: acc.comissao + (Number(item.comissaoVenda) || 0),
+    }),
+    { repasse: 0, comissao: 0 },
+  );
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat("pt-BR", {
@@ -67,12 +73,20 @@ export function PaymentImportModal({
             </div>
             <div className="flex gap-6 text-right">
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Repasse</p>
-                <p className="text-lg font-bold text-blue-700">{formatCurrency(totals.repasse)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">
+                  Total Repasse
+                </p>
+                <p className="text-lg font-bold text-blue-700">
+                  {formatCurrency(totals.repasse)}
+                </p>
               </div>
               <div>
-                <p className="text-[10px] text-muted-foreground uppercase font-bold">Total Comissões</p>
-                <p className="text-lg font-bold text-slate-900">{formatCurrency(totals.comissao)}</p>
+                <p className="text-[10px] text-muted-foreground uppercase font-bold">
+                  Total Comissões
+                </p>
+                <p className="text-lg font-bold text-slate-900">
+                  {formatCurrency(totals.comissao)}
+                </p>
               </div>
             </div>
           </div>
@@ -86,28 +100,55 @@ export function PaymentImportModal({
                   <TableRow>
                     <TableHead className="font-bold">NOTA</TableHead>
                     <TableHead className="font-bold">LOJA</TableHead>
-                    <TableHead className="font-bold text-center">PARCELA</TableHead>
-                    <TableHead className="font-bold text-right text-blue-600">REPASSE</TableHead>
-                    <TableHead className="font-bold text-right">COM. VENDA</TableHead>
-                    <TableHead className="font-bold text-right">COM. FRETE</TableHead>
-                    <TableHead className="font-bold text-right">BASE ICMS</TableHead>
+                    <TableHead className="font-bold text-center">
+                      PARCELA
+                    </TableHead>
+                    <TableHead className="font-bold text-right text-blue-600">
+                      REPASSE
+                    </TableHead>
+                    <TableHead className="font-bold text-right">
+                      COM. VENDA
+                    </TableHead>
+                    <TableHead className="font-bold text-right">
+                      COM. FRETE
+                    </TableHead>
+                    <TableHead className="font-bold text-right">
+                      FRETES E TARIFAS
+                    </TableHead>
+
+                    <TableHead className="font-bold text-right">
+                      BASE ICMS
+                    </TableHead>
                     <TableHead className="w-[50px]"></TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {data.map((item, idx) => (
                     <TableRow key={idx} className="hover:bg-slate-50">
-                      <TableCell className="font-medium font-mono">{item.nota}</TableCell>
-                      <TableCell className="text-xs uppercase">{item.loja}</TableCell>
+                      <TableCell className="font-medium font-mono">
+                        {item.nota}
+                      </TableCell>
+                      <TableCell className="text-xs uppercase">
+                        {item.loja}
+                      </TableCell>
                       <TableCell className="text-center text-xs">
                         {item.parcelaPaga} / {item.parcelas}
                       </TableCell>
                       <TableCell className="text-right font-bold text-blue-600">
                         {formatCurrency(item.repasse)}
                       </TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.comissaoVenda)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(item.comissaoFrete)}</TableCell>
-                      <TableCell className="text-right text-muted-foreground">{formatCurrency(item.baseIcms)}</TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.comissaoVenda)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.comissaoFrete)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {formatCurrency(item.frete_e_taxas)}
+                      </TableCell>
+                      <TableCell className="text-right text-muted-foreground">
+                        {formatCurrency(item.baseIcms)}
+                      </TableCell>
                       <TableCell>
                         <Button
                           variant="ghost"
@@ -126,22 +167,57 @@ export function PaymentImportModal({
           </div>
         </ScrollArea>
 
-        <DialogFooter className="p-4 border-t bg-slate-50">
-          <div className="mr-auto self-center">
+        {/* Certifique-se de ter um estado para controlar a data se ainda não tiver */}
+        {/* const [dataRepasse, setDataRepasse] = useState(new Date().toISOString().split('T')[0]); */}
+
+        <DialogFooter className="p-4 border-t bg-slate-50 flex items-center justify-between gap-4">
+          {/* LADO ESQUERDO: Contador */}
+          <div className="flex-1">
             <span className="text-sm font-medium text-slate-500">
               {data.length} registros prontos para processar
             </span>
           </div>
-          <Button variant="outline" onClick={() => onOpenChange(false)} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button 
-            onClick={onConfirm} 
-            disabled={loading || data.length === 0}
-            className="bg-blue-600 hover:bg-blue-700 text-white"
-          >
-            {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : "Confirmar Pagamentos"}
-          </Button>
+
+          {/* CENTRO: Input de Data */}
+          <div className="flex flex-row items-center gap-1.5">
+            <label
+              htmlFor="data-repasse"
+              className="text-xs font-semibold uppercase tracking-wider text-slate-500"
+            >
+              Data do Repasse
+            </label>
+            <input
+              id="data-repasse"
+              type="date"
+              className="flex h-9 w-40 rounded-md border border-slate-200 bg-white px-3 py-1 text-sm shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-blue-500"
+              value={dataRepasse}
+              onChange={(e) => setDataRepasse(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
+          {/* LADO DIREITO: Botões de Ação */}
+          <div className="flex-1 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              onClick={() => onOpenChange(false)}
+              disabled={loading}
+            >
+              Cancelar
+            </Button>
+
+            <Button
+              onClick={() => onConfirm(dataRepasse)}
+              disabled={loading || data.length === 0 || !dataRepasse}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
+            >
+              {loading ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                "Confirmar Pagamentos"
+              )}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

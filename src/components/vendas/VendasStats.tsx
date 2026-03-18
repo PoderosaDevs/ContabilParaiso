@@ -24,7 +24,7 @@ export const VendasStats = ({ count, totalLiquido, totalRecebido, totalTaxas }: 
       {/* Card: Receita Prevista */}
       <div className="bg-white p-5 rounded-2xl border shadow-sm flex items-center justify-between">
         <div>
-          <p className="text-sm text-muted-foreground font-medium">Receita Prevista</p>
+          <p className="text-sm text-muted-foreground font-medium">Receita Bruta</p>
           <h3 className="text-2xl font-bold text-amber-600">
             R$ {totalLiquido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </h3>
