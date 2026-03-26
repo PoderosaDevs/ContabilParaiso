@@ -1,4 +1,4 @@
-import { useState, useRef, useMemo, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
 import {
@@ -32,7 +32,6 @@ import {
 } from "@/components/ui/select";
 import { vendaService } from "@/services/api-routes";
 
-// --- TIPAGENS ---
 interface VendaFrete {
   id: string;
   nf: string | number;
@@ -50,74 +49,59 @@ interface FreteError {
 }
 
 const Frete = () => {
-  // --- ESTADOS DE DADOS ---
   const [vendas, setVendas] = useState<VendaFrete[]>([]);
   const [loading, setLoading] = useState(false);
-  
-  // --- ESTADOS DE ERRO (Pós-Importação) ---
   const [importErrors, setImportErrors] = useState<FreteError[]>([]);
   const [errorStoreFilter, setErrorStoreFilter] = useState<string>("all");
-
-  // --- ESTADOS DA TABELA PRINCIPAL ---
   const [searchNf, setSearchNf] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"all" | "pendente" | "pago">("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
 
-  // --- ESTADOS DE PAGINAÇÃO ---
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 20;
+  const [itemsPerPage] = useState(50);
+  const [totalItems, setTotalItems] = useState(0);
 
-  // --- ESTADOS DE IMPORTAÇÃO ---
   const [previewData, setPreviewData] = useState<any[] | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // =======================================================================
-  // 1. CARREGAMENTO INICIAL
-  // =======================================================================
-  const fetchVendas = async () => {
+  const fetchVendas = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await vendaService.getAllFrete();
-      setVendas(data);
+      const response = await vendaService.getAllFrete(
+        currentPage,
+        itemsPerPage,
+        searchNf.trim(),
+        statusFilter
+      );
+
+      setVendas(response.data || []);
+      setTotalItems(response.total || 0);
     } catch (error) {
       toast.error("Erro ao carregar vendas de frete.");
     } finally {
       setLoading(false);
     }
+  }, [currentPage, itemsPerPage, searchNf, statusFilter]);
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchVendas();
+    }, 300);
+
+    return () => clearTimeout(handler);
+  }, [fetchVendas]);
+
+  const handleFilterChange = (val: string) => {
+    setStatusFilter(val);
+    setCurrentPage(1);
   };
 
-  useEffect(() => {
-    fetchVendas();
-  }, []);
-
-  // =======================================================================
-  // 2. FILTROS E PAGINAÇÃO
-  // =======================================================================
-  const filteredVendas = useMemo(() => {
-    return vendas.filter((v) => {
-      const nfString = String(v.nf || "").toLowerCase();
-      const matchesSearch = nfString.includes(searchNf.toLowerCase());
-      const isPago = v.fretePago;
-
-      const matchesStatus =
-        statusFilter === "all" ||
-        (statusFilter === "pago" && isPago) ||
-        (statusFilter === "pendente" && !isPago);
-
-      return matchesSearch && matchesStatus;
-    });
-  }, [vendas, searchNf, statusFilter]);
-
-  // Reseta a página ao buscar
-  useEffect(() => {
+  const handleSearchChange = (val: string) => {
+    setSearchNf(val);
     setCurrentPage(1);
-  }, [searchNf, statusFilter]);
+  };
 
-  const totalPages = Math.ceil(filteredVendas.length / itemsPerPage);
-  const paginatedVendas = useMemo(() => {
-    const start = (currentPage - 1) * itemsPerPage;
-    return filteredVendas.slice(start, start + itemsPerPage);
-  }, [filteredVendas, currentPage]);
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
 
   const getPageNumbers = () => {
     const pages = [];
@@ -133,9 +117,6 @@ const Frete = () => {
     return pages;
   };
 
-  // =======================================================================
-  // 3. COLUNAS (NO FORMATO CUSTOMIZADO DA SUA APLICAÇÃO)
-  // =======================================================================
   const columns = [
     {
       key: "nf",
@@ -210,9 +191,6 @@ const Frete = () => {
     },
   ];
 
-  // =======================================================================
-  // 4. FLUXO DE IMPORTAÇÃO E PREVIEW
-  // =======================================================================
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -246,18 +224,19 @@ const Frete = () => {
     reader.readAsBinaryString(file);
   };
 
- const handleConfirmImport = async () => {
+  const handleConfirmImport = async () => {
     setIsProcessing(true);
     setImportErrors([]);
 
     try {
-      // Chamada real para a API:
       const response = await vendaService.importFretes(previewData!);
       const { successCount, errors } = response;
 
       if (successCount > 0) {
         toast.success(`${successCount} faturas de frete processadas!`);
-        fetchVendas(); // Atualiza a tabela
+        setSearchNf("");
+        setCurrentPage(1);
+        await fetchVendas();
       }
 
       if (errors && errors.length > 0) {
@@ -273,20 +252,10 @@ const Frete = () => {
     }
   };
 
-  // =======================================================================
-  // 5. LÓGICA DA TABELA DE ERROS
-  // =======================================================================
-  const filteredErrors = useMemo(() => {
-    return importErrors.filter(
+  const exportErrorsToCSV = () => {
+    const filteredErrors = importErrors.filter(
       (err) => errorStoreFilter === "all" || err.loja === errorStoreFilter,
     );
-  }, [importErrors, errorStoreFilter]);
-
-  const uniqueErrorStores = useMemo(() => {
-    return Array.from(new Set(importErrors.map((e) => e.loja)));
-  }, [importErrors]);
-
-  const exportErrorsToCSV = () => {
     const ws = XLSX.utils.json_to_sheet(filteredErrors);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "Erros de Frete");
@@ -296,7 +265,6 @@ const Frete = () => {
   return (
     <AppLayout title="Conciliação de Frete">
       <div className="space-y-6">
-        {/* --- HEADER --- */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-xl border shadow-sm">
           <div>
             <h2 className="text-2xl font-bold tracking-tight text-slate-900">
@@ -328,7 +296,6 @@ const Frete = () => {
           />
         </div>
 
-        {/* --- TABELA TEMPORÁRIA DE ERROS --- */}
         {importErrors.length > 0 && (
           <div className="bg-red-50 border border-red-200 rounded-xl overflow-hidden shadow-sm animate-in fade-in slide-in-from-top-4">
             <div className="p-4 bg-red-100 border-b border-red-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -346,7 +313,7 @@ const Frete = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">Todas as Lojas</SelectItem>
-                    {uniqueErrorStores.map((loja) => (
+                    {Array.from(new Set(importErrors.map((e) => e.loja))).map((loja) => (
                       <SelectItem key={loja} value={loja}>
                         {loja}
                       </SelectItem>
@@ -375,7 +342,9 @@ const Frete = () => {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredErrors.map((err, idx) => (
+                  {importErrors
+                    .filter(err => errorStoreFilter === "all" || err.loja === errorStoreFilter)
+                    .map((err, idx) => (
                     <tr key={idx} className="border-b border-red-100 bg-white">
                       <td className="px-6 py-3 font-medium">#{err.nf}</td>
                       <td className="px-6 py-3">{err.fatura}</td>
@@ -389,24 +358,18 @@ const Frete = () => {
                   ))}
                 </tbody>
               </table>
-              {filteredErrors.length === 0 && (
-                <div className="p-4 text-center text-red-600">
-                  Nenhum erro encontrado para esta loja.
-                </div>
-              )}
             </div>
           </div>
         )}
 
-        {/* --- FILTROS --- */}
         <div className="flex flex-col sm:flex-row gap-4 mb-4">
           <Input
-            placeholder="Buscar por Nota Fiscal..."
+            placeholder="Buscar por NF ou Fatura..."
             value={searchNf}
-            onChange={(e) => setSearchNf(e.target.value)}
+            onChange={(e) => handleSearchChange(e.target.value)}
             className="max-w-xs bg-white"
           />
-          <Select value={statusFilter} onValueChange={(val: any) => setStatusFilter(val)}>
+          <Select value={statusFilter} onValueChange={handleFilterChange}>
             <SelectTrigger className="w-[200px] bg-white">
               <SelectValue placeholder="Situação do Frete" />
             </SelectTrigger>
@@ -418,7 +381,6 @@ const Frete = () => {
           </Select>
         </div>
 
-        {/* --- TABELA PRINCIPAL COM PAGINAÇÃO --- */}
         <div className="bg-white border rounded-xl shadow-sm min-h-[400px] flex flex-col overflow-hidden">
           {loading ? (
             <div className="flex-1 flex justify-center items-center">
@@ -427,13 +389,12 @@ const Frete = () => {
           ) : (
             <>
               <div className="flex-1 overflow-auto">
-                <DataTable columns={columns} data={paginatedVendas} />
+                <DataTable columns={columns} data={vendas} />
               </div>
               
-              {/* Rodapé da Paginação */}
               <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50">
                 <span className="text-sm text-slate-500 font-medium">
-                  Mostrando {paginatedVendas.length} de {filteredVendas.length} registros
+                  Total: {totalItems} registros | Página {currentPage} de {totalPages || 1}
                 </span>
                 
                 {totalPages > 1 && (
@@ -482,7 +443,7 @@ const Frete = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => setCurrentPage(totalPages)}
-                      disabled={currentPage >= totalPages || totalPages === 0}
+                      disabled={currentPage >= totalPages}
                       className="h-8 w-8 p-0"
                     >
                       <ChevronsRight className="w-4 h-4" />
@@ -495,7 +456,6 @@ const Frete = () => {
         </div>
       </div>
 
-      {/* --- MODAL DE PREVIEW --- */}
       {previewData && (
         <FretePreviewModal
           data={previewData}

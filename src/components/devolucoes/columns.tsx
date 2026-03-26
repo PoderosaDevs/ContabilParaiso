@@ -19,8 +19,8 @@ import {
   DropdownMenuLabel,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
+import { Devolucao } from "@/services/api-routes";
 
-// --- HELPERS ---
 const formatCurrency = (value: number | string | null | undefined) => {
   if (!value) return "R$ 0,00";
   const num = Number(value);
@@ -40,41 +40,40 @@ const formatDate = (dateString: string | null | undefined) => {
   }
 };
 
-// --- COLUNAS DE DEVOLUÇÃO ---
-
 export const getDevolucoesColumns = (
-  onEdit: (item: any) => void,
+  onEdit: (item: Devolucao) => void,
   onDelete: (id: string) => void,
 ) => [
-  // 1. IDENTIFICAÇÃO (NF e Cód. Devolução)
   {
     key: "nf",
     header: () => <div className="text-center w-full">Identificação</div>,
-    render: (v: any) => (
-      <div className="flex flex-col items-center justify-center gap-1.5 w-full min-w-[100px]">
-        <div className="flex items-center gap-2">
-          <span className="font-bold font-mono text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 text-xs shadow-sm">
-            #{v.nf || "S/N"}
+    render: (v: Devolucao) => (
+      <div className="flex flex-col items-center justify-center gap-1.5 w-full min-w-[120px]">
+        <div className="flex flex-col gap-1 w-full items-center">
+          <span className="font-bold font-mono text-[10px] text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200 shadow-sm w-fit">
+            NF: {v.nfVenda || "S/N"}
           </span>
+      
         </div>
-        {v.devolucao && (
-          <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1 font-semibold">
-            <RotateCcw className="w-3 h-3" />
-            {v.devolucao}
+        
+        {v.numeroDevolucao && (
+          <span className="text-[10px] text-amber-600 bg-amber-50 px-2 py-0.5 rounded border border-amber-100 flex items-center gap-1 font-semibold max-w-[110px] truncate">
+            <RotateCcw className="w-3 h-3 shrink-0" />
+            {v.numeroDevolucao}
           </span>
         )}
+        
         <span className="text-[10px] text-slate-400 font-medium">
-          {formatDate(v.data || v.dataVenda)}
+          {formatDate(v.data)}
         </span>
       </div>
     ),
   },
 
-  // 2. CANAL (LOJA)
   {
     key: "loja",
     header: () => <div className="text-center w-full">Canal</div>,
-    render: (v: any) => (
+    render: (v: Devolucao) => (
       <div className="flex flex-col items-center justify-center gap-1.5 w-full min-w-[120px]">
         <div className="flex items-center gap-1.5">
           <Store className="w-3.5 h-3.5 text-slate-400" />
@@ -86,10 +85,10 @@ export const getDevolucoesColumns = (
           </span>
         </div>
 
-        {v.marketplace ? (
+        {v.venda?.marketplace ? (
           <span className="text-[10px] bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full border border-blue-100 font-semibold flex items-center gap-1">
             <TrendingUp className="w-3 h-3" />
-            {v.marketplace.titulo || v.marketplace.nome}
+            {v.venda.marketplace.titulo || v.venda.marketplace.titulo}
           </span>
         ) : (
           <span className="text-[10px] text-slate-400 italic px-1 bg-slate-50 rounded border border-slate-100">
@@ -100,13 +99,11 @@ export const getDevolucoesColumns = (
     ),
   },
 
-  // 3. DETALHES DA DEVOLUÇÃO (Tratativa e Motivo)
   {
     key: "detalhes",
     header: () => <div className="text-center w-full">Detalhes do Retorno</div>,
-    render: (v: any) => (
+    render: (v: Devolucao) => (
       <div className="flex flex-col items-center justify-center gap-1.5 w-full min-w-[140px]">
-        {/* Tratativa */}
         <div
           className="flex items-center gap-1.5 px-2 py-1 rounded bg-slate-50 border border-slate-200 w-full max-w-[130px] justify-center"
           title={`Tratativa: ${v.tratativa}`}
@@ -117,7 +114,6 @@ export const getDevolucoesColumns = (
           </span>
         </div>
 
-        {/* Motivo */}
         <div
           className="flex items-center gap-1.5 px-2 py-1 rounded bg-amber-50 border border-amber-200 w-full max-w-[130px] justify-center"
           title={`Motivo: ${v.motivo}`}
@@ -131,23 +127,20 @@ export const getDevolucoesColumns = (
     ),
   },
 
-  // 4. FINANCEIRO (Base, Valor e Saldo)
   {
     key: "valores",
     header: () => <div className="text-center w-full">Valores Impactados</div>,
-    render: (v: any) => (
+    render: (v: Devolucao) => (
       <div className="flex flex-col items-center justify-center gap-1.5 w-full min-w-[150px]">
-        {/* A: BASE */}
         <div className="flex items-center justify-between w-full max-w-[140px] px-2 text-slate-500">
           <span className="text-[9px] font-medium flex items-center gap-1">
             <BadgeCent className="w-3 h-3 text-slate-400" /> Base
           </span>
           <span className="text-[10px] font-semibold">
-            {formatCurrency(v.base)}
+            {formatCurrency(v.valorBase)}
           </span>
         </div>
 
-        {/* B: VALOR DA DEVOLUÇÃO (Destaque principal) */}
         <div className="flex items-center justify-between w-full max-w-[140px] px-2 py-1 bg-rose-50 rounded border border-rose-100">
           <span
             className="text-[10px] text-rose-600 font-bold flex items-center gap-1"
@@ -160,7 +153,6 @@ export const getDevolucoesColumns = (
           </span>
         </div>
 
-        {/* C: SALDO */}
         {Number(v.saldo) !== 0 ? (
           <div className="flex items-center justify-between w-full max-w-[140px] px-2 text-slate-400">
             <span className="text-[9px] font-medium flex items-center gap-1">
@@ -181,11 +173,10 @@ export const getDevolucoesColumns = (
     ),
   },
 
-  // 5. AÇÕES
   {
     key: "actions",
     header: "",
-    render: (item: any) => (
+    render: (item: Devolucao) => (
       <div className="flex justify-center items-center w-full">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
