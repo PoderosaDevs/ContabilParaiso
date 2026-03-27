@@ -73,16 +73,17 @@ const Vendas = () => {
   const [modalOpen, setModalOpen] = useState(false);
 
   // --- ALTERAÇÃO: statusFilter agora é um array ---
-  const [statusFilter, setStatusFilter] = useState<string[]>([]); 
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
   const fetchData = async () => {
     try {
       setLoading(true);
-      
+
       // Transformar o array de status em string separada por vírgula para a API (ex: PAGO,PENDENTE)
-      const statusParam = statusFilter.length > 0 ? statusFilter.join(",") : undefined;
+      const statusParam =
+        statusFilter.length > 0 ? statusFilter.join(",") : undefined;
 
       const [vendasRes, mktData, summaryData] = await Promise.all([
         vendaService.getAll({
@@ -91,7 +92,8 @@ const Vendas = () => {
           dataInicio: startDate || undefined,
           dataFim: endDate || undefined,
           status: statusParam, // Enviando os múltiplos status para o back-end
-          marketplaceId: marketplaceFilter !== "all" ? marketplaceFilter : undefined
+          marketplaceId:
+            marketplaceFilter !== "all" ? marketplaceFilter : undefined,
         }),
         marketplaceService.getAll(),
         vendaService.getSummary(startDate || undefined, endDate || undefined),
@@ -128,9 +130,9 @@ const Vendas = () => {
 
       const matchesMarketplace =
         marketplaceFilter === "all" || v.marketplaceId === marketplaceFilter;
-      
+
       // --- ALTERAÇÃO: Lógica de filtro local para múltiplos status ---
-      const matchesStatus = 
+      const matchesStatus =
         statusFilter.length === 0 || statusFilter.includes(v.status);
 
       return matchesSearch && matchesMarketplace && matchesStatus;
@@ -185,10 +187,22 @@ const Vendas = () => {
         }
 
         const excelDateToJS = (serial: any) => {
-          if (!serial) return new Date().toISOString();
-          if (typeof serial === "string") return serial;
-          const date = new Date(Math.floor(serial - 25569) * 86400 * 1000);
-          return date.toLocaleDateString("pt-BR");
+          if (!serial) return "";
+          if (typeof serial === "string") return serial.trim();
+
+          // 1. Converte o serial para data base (Meia-noite UTC)
+          const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
+
+          // 2. Extrai os componentes UTC puros
+          const dia = date.getUTCDate();
+          const mes = date.getUTCMonth(); // Janeiro é 0
+          const ano = date.getUTCFullYear();
+
+          // 3. Cria um novo objeto Date forçando 08:00 da manhã
+          // Usamos Date.UTC para que o payload enviado seja consistente
+          const dataFinal = new Date(Date.UTC(ano, mes, dia, 8, 0, 0));
+
+          return dataFinal.toISOString();
         };
 
         const parseNum = (v: any) => {
@@ -217,17 +231,28 @@ const Vendas = () => {
         };
 
         if (importType === "venda") {
-          const mapped = rawData.map((item: any) => ({
-            nf: String(getVal(item, ["NF", "NOTA", "DOC"]) || "???").trim(),
-            loja: String(
-              getVal(item, ["LOJA", "CLIENTE"]) || "LOJA PADRÃO",
-            ).trim(),
-            baseIcms: parseNum(getVal(item, ["BASE ICMS", "VALOR"])),
-            dataVenda:
-              typeof getVal(item, ["DATA"]) === "number"
-                ? excelDateToJS(getVal(item, ["DATA"]))
-                : getVal(item, ["DATA"]),
-          }));
+          const mapped = rawData.map((item: any) => {
+            const rawValue = getVal(item, ["DATA"]);
+            let dataISO = "";
+
+            if (typeof rawValue === "number") {
+              // Se for número serial (Ex: 46023)
+              dataISO = excelDateToJS(rawValue);
+            } else if (typeof rawValue === "string") {
+              // Se for string "01/01/2026", quebramos manualmente pra não usar o fuso local
+              const [d, m, y] = rawValue.split("/").map(Number);
+              dataISO = new Date(Date.UTC(y, m - 1, d, 8, 0, 0)).toISOString();
+            }
+
+            return {
+              nf: String(getVal(item, ["NF", "NOTA", "DOC"]) || "???").trim(),
+              loja: String(
+                getVal(item, ["LOJA", "CLIENTE"]) || "LOJA PADRÃO",
+              ).trim(),
+              baseIcms: parseNum(getVal(item, ["BASE ICMS", "VALOR"])),
+              dataVenda: dataISO, // Aqui vai o "2026-01-01T08:00:00.000Z"
+            };
+          });
           setPreviewData(mapped);
           setPreviewModalOpen(true);
         } else if (importType === "pagamento") {
@@ -484,9 +509,7 @@ const Vendas = () => {
           count={summary?.vendasNoPeriodo || 0}
           totalLiquido={summary?.receitaBruta || 0}
           totalRecebido={summary?.receitaRecebida || 0}
-          totalTaxas={
-            summary ? summary.comissoesDescontadas : 0
-          }
+          totalTaxas={summary ? summary.comissoesDescontadas : 0}
           faltaReceber={summary?.faltaReceber || 0}
           freteETaxas={summary?.fretesETarifas || 0}
         />
