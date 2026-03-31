@@ -72,7 +72,6 @@ const Vendas = () => {
   const [uniqueStores, setUniqueStores] = useState<string[]>([]);
   const [modalOpen, setModalOpen] = useState(false);
 
-  // --- ALTERAÇÃO: statusFilter agora é um array ---
   const [statusFilter, setStatusFilter] = useState<string[]>([]);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
@@ -81,7 +80,6 @@ const Vendas = () => {
     try {
       setLoading(true);
 
-      // Transformar o array de status em string separada por vírgula para a API (ex: PAGO,PENDENTE)
       const statusParam =
         statusFilter.length > 0 ? statusFilter.join(",") : undefined;
 
@@ -91,12 +89,17 @@ const Vendas = () => {
           limit: itemsPerPage,
           dataInicio: startDate || undefined,
           dataFim: endDate || undefined,
-          status: statusParam, // Enviando os múltiplos status para o back-end
+          status: statusParam,
           marketplaceId:
             marketplaceFilter !== "all" ? marketplaceFilter : undefined,
         }),
         marketplaceService.getAll(),
-        vendaService.getSummary(startDate || undefined, endDate || undefined),
+        vendaService.getSummary(
+          startDate || undefined,
+          endDate || undefined,
+          statusParam,
+          marketplaceFilter !== "all" ? marketplaceFilter : undefined,
+        ),
       ]);
 
       if (Array.isArray(vendasRes)) {
@@ -131,7 +134,6 @@ const Vendas = () => {
       const matchesMarketplace =
         marketplaceFilter === "all" || v.marketplaceId === marketplaceFilter;
 
-      // --- ALTERAÇÃO: Lógica de filtro local para múltiplos status ---
       const matchesStatus =
         statusFilter.length === 0 || statusFilter.includes(v.status);
 
@@ -189,19 +191,11 @@ const Vendas = () => {
         const excelDateToJS = (serial: any) => {
           if (!serial) return "";
           if (typeof serial === "string") return serial.trim();
-
-          // 1. Converte o serial para data base (Meia-noite UTC)
           const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
-
-          // 2. Extrai os componentes UTC puros
           const dia = date.getUTCDate();
-          const mes = date.getUTCMonth(); // Janeiro é 0
+          const mes = date.getUTCMonth();
           const ano = date.getUTCFullYear();
-
-          // 3. Cria um novo objeto Date forçando 08:00 da manhã
-          // Usamos Date.UTC para que o payload enviado seja consistente
           const dataFinal = new Date(Date.UTC(ano, mes, dia, 8, 0, 0));
-
           return dataFinal.toISOString();
         };
 
@@ -234,23 +228,19 @@ const Vendas = () => {
           const mapped = rawData.map((item: any) => {
             const rawValue = getVal(item, ["DATA"]);
             let dataISO = "";
-
             if (typeof rawValue === "number") {
-              // Se for número serial (Ex: 46023)
               dataISO = excelDateToJS(rawValue);
             } else if (typeof rawValue === "string") {
-              // Se for string "01/01/2026", quebramos manualmente pra não usar o fuso local
               const [d, m, y] = rawValue.split("/").map(Number);
               dataISO = new Date(Date.UTC(y, m - 1, d, 8, 0, 0)).toISOString();
             }
-
             return {
               nf: String(getVal(item, ["NF", "NOTA", "DOC"]) || "???").trim(),
               loja: String(
                 getVal(item, ["LOJA", "CLIENTE"]) || "LOJA PADRÃO",
               ).trim(),
               baseIcms: parseNum(getVal(item, ["BASE ICMS", "VALOR"])),
-              dataVenda: dataISO, // Aqui vai o "2026-01-01T08:00:00.000Z"
+              dataVenda: dataISO,
             };
           });
           setPreviewData(mapped);
@@ -478,7 +468,6 @@ const Vendas = () => {
           onSearchChange={setSearch}
           marketplaceFilter={marketplaceFilter}
           onMarketplaceFilterChange={setMarketplaceFilter}
-          // --- Passando estados novos ---
           statusFilter={statusFilter}
           onStatusFilterChange={setStatusFilter}
           startDate={startDate}
@@ -488,7 +477,7 @@ const Vendas = () => {
           onClearFilters={() => {
             setSearch("");
             setMarketplaceFilter("all");
-            setStatusFilter([]); // Limpa para array vazio
+            setStatusFilter([]);
             setStartDate("");
             setEndDate("");
           }}

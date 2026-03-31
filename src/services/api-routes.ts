@@ -207,10 +207,17 @@ export const vendaService = {
       .get<Venda[]>(`/vendas?${query.toString()}`)
       .then((res) => res.data);
   },
-  getSummary: (dataInicio?: string, dataFim?: string) => {
+  getSummary: (
+    dataInicio?: string,
+    dataFim?: string,
+    status?: string,
+    marketplaceId?: string,
+  ) => {
     const params = new URLSearchParams();
     if (dataInicio) params.append("dataInicio", dataInicio);
     if (dataFim) params.append("dataFim", dataFim);
+    if (status) params.append("status", status);
+    if (marketplaceId) params.append("marketplaceId", marketplaceId);
     return api
       .get<VendaSummary>(`/vendas/summary?${params.toString()}`)
       .then((res) => res.data);
