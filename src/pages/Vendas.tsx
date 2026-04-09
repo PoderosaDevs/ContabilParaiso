@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -33,6 +32,8 @@ import { VendasHeader } from "@/components/vendas/VendasHeader";
 import { VendasStats } from "@/components/vendas/VendasStats";
 import { ManualOperationModal } from "@/components/vendas/ManualOperationModal";
 import api from "@/services/api";
+import { useDebounce } from "@/hooks/useDebounce";
+import { ExcelParser } from "@/lib/utils";
 
 const Vendas = () => {
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -77,29 +78,38 @@ const Vendas = () => {
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
+  const debouncedSearch = useDebounce(search, 500);
+
+  const activeParams = useMemo(() => {
+    const isSearching = debouncedSearch.trim().length > 0;
+    return {
+      search: debouncedSearch.trim(),
+      dataInicio: isSearching ? undefined : (startDate || undefined),
+      dataFim: isSearching ? undefined : (endDate || undefined),
+      status: isSearching ? undefined : (statusFilter.length > 0 ? statusFilter.join(",") : undefined),
+      marketplaceId: marketplaceFilter !== "all" ? marketplaceFilter : undefined,
+    };
+  }, [debouncedSearch, startDate, endDate, statusFilter, marketplaceFilter]);
+
   const fetchData = async () => {
     try {
       setLoading(true);
-
-      const statusParam =
-        statusFilter.length > 0 ? statusFilter.join(",") : undefined;
-
       const [vendasRes, mktData, summaryData] = await Promise.all([
         vendaService.getAll({
           page: currentPage,
           limit: itemsPerPage,
-          dataInicio: startDate || undefined,
-          dataFim: endDate || undefined,
-          status: statusParam,
-          marketplaceId:
-            marketplaceFilter !== "all" ? marketplaceFilter : undefined,
+          search: activeParams.search,
+          dataInicio: activeParams.dataInicio,
+          dataFim: activeParams.dataFim,
+          status: activeParams.status,
+          marketplaceId: activeParams.marketplaceId,
         }),
         marketplaceService.getAll(),
         vendaService.getSummary(
-          startDate || undefined,
-          endDate || undefined,
-          statusParam,
-          marketplaceFilter !== "all" ? marketplaceFilter : undefined,
+          activeParams.dataInicio,
+          activeParams.dataFim,
+          activeParams.status,
+          activeParams.marketplaceId,
         ),
       ]);
 
@@ -123,43 +133,11 @@ const Vendas = () => {
 
   useEffect(() => {
     fetchData();
-  }, [currentPage, startDate, endDate, statusFilter, marketplaceFilter]);
-
-  const filteredVendas = useMemo(() => {
-    return vendas.filter((v) => {
-      const searchLower = search.toLowerCase();
-      const matchesSearch =
-        (v.nf && String(v.nf).toLowerCase().includes(searchLower)) ||
-        (v.loja && String(v.loja).toLowerCase().includes(searchLower));
-
-      const matchesMarketplace =
-        marketplaceFilter === "all" || v.marketplaceId === marketplaceFilter;
-
-      const matchesStatus =
-        statusFilter.length === 0 || statusFilter.includes(v.status);
-
-      return matchesSearch && matchesMarketplace && matchesStatus;
-    });
-  }, [vendas, search, marketplaceFilter, statusFilter]);
-
-  const totalPages = Math.ceil(totalItems / itemsPerPage);
-
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxButtons = 5;
-    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
-    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
-    if (endPage - startPage + 1 < maxButtons)
-      startPage = Math.max(1, endPage - maxButtons + 1);
-    for (let i = startPage; i <= endPage; i++) {
-      if (i >= 1) pages.push(i);
-    }
-    return pages;
-  };
+  }, [currentPage, activeParams]);
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [search, marketplaceFilter, statusFilter, startDate, endDate]);
+  }, [activeParams]);
 
   const handleTriggerImport = (
     type: "venda" | "pagamento" | "reembolso" | "devolucao",
@@ -181,114 +159,59 @@ const Vendas = () => {
     reader.onload = (evt) => {
       try {
         const bstr = evt.target?.result;
-        const wb = XLSX.read(bstr, { type: "binary" });
-        const ws = wb.Sheets[wb.SheetNames[0]];
-        const rawData = XLSX.utils.sheet_to_json(ws);
+        const rawData = ExcelParser.parseFileToJson(bstr);
+
         if (!rawData.length) {
           toast.warning("Planilha vazia.");
           return;
         }
 
-        const excelDateToJS = (serial: any) => {
-          if (!serial) return "";
-          if (typeof serial === "string") return serial.trim();
-          const date = new Date(Math.round((serial - 25569) * 86400 * 1000));
-          const dia = date.getUTCDate();
-          const mes = date.getUTCMonth();
-          const ano = date.getUTCFullYear();
-          const dataFinal = new Date(Date.UTC(ano, mes, dia, 8, 0, 0));
-          return dataFinal.toISOString();
-        };
-
-        const parseNum = (v: any) => {
-          if (typeof v === "number") return v;
-          if (!v) return 0;
-          return (
-            parseFloat(
-              String(v)
-                .replace("R$", "")
-                .replace(/\./g, "")
-                .replace(",", ".")
-                .trim(),
-            ) || 0
-          );
-        };
-
-        const getVal = (item: any, possibleNames: string[]) => {
-          const keys = Object.keys(item);
-          for (const name of possibleNames) {
-            const foundKey = keys.find(
-              (k) => k.trim().toUpperCase() === name.toUpperCase(),
-            );
-            if (foundKey) return item[foundKey];
-          }
-          return "";
-        };
-
         if (importType === "venda") {
-          const mapped = rawData.map((item: any) => {
-            const rawValue = getVal(item, ["DATA"]);
-            let dataISO = "";
-            if (typeof rawValue === "number") {
-              dataISO = excelDateToJS(rawValue);
-            } else if (typeof rawValue === "string") {
-              const [d, m, y] = rawValue.split("/").map(Number);
-              dataISO = new Date(Date.UTC(y, m - 1, d, 8, 0, 0)).toISOString();
-            }
-            return {
-              nf: String(getVal(item, ["NF", "NOTA", "DOC"]) || "???").trim(),
-              loja: String(
-                getVal(item, ["LOJA", "CLIENTE"]) || "LOJA PADRÃO",
-              ).trim(),
-              baseIcms: parseNum(getVal(item, ["BASE ICMS", "VALOR"])),
-              dataVenda: dataISO,
-            };
-          });
+          const mapped = rawData.map((item: any) => ({
+            nf: String(ExcelParser.getCellValue(item, ["NF", "NOTA", "DOC"]) || "???").trim(),
+            loja: String(ExcelParser.getCellValue(item, ["LOJA", "CLIENTE"]) || "LOJA PADRÃO").trim(),
+            baseIcms: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["BASE ICMS", "VALOR"])),
+            dataVenda: ExcelParser.excelDateToJS(ExcelParser.getCellValue(item, ["DATA"])),
+          }));
           setPreviewData(mapped);
           setPreviewModalOpen(true);
         } else if (importType === "pagamento") {
           const mapped = rawData.map((item: any) => ({
-            nota: String(getVal(item, ["NOTA", "NF"]) || "???").trim(),
-            loja: String(
-              getVal(item, ["LOJA", "CLIENTE"]) || "DESCONHECIDA",
-            ).trim(),
-            repasse: parseNum(getVal(item, ["REPASSE", "VALOR", "LIQUIDO"])),
-            comissaoVenda: parseNum(getVal(item, ["COMISSÃO VENDA"])),
-            comissaoFrete: parseNum(getVal(item, ["COMISSÃO FRETE"])),
-            frete_e_taxas: parseNum(getVal(item, ["FRETES E TARIFAS"])),
-            baseIcms: parseNum(getVal(item, ["BASE ICMS"])),
-            parcelaPaga: parseInt(String(getVal(item, ["PARCELA PAGA"]))) || 1,
-            parcelas: parseInt(String(getVal(item, ["PARCELAS"]))) || 1,
+            nota: String(ExcelParser.getCellValue(item, ["NOTA", "NF"]) || "???").trim(),
+            loja: String(ExcelParser.getCellValue(item, ["LOJA", "CLIENTE"]) || "DESCONHECIDA").trim(),
+            repasse: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["REPASSE", "VALOR", "LIQUIDO"])),
+            comissaoVenda: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSÃO VENDA"])),
+            comissaoFrete: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSÃO FRETE"])),
+            frete_e_taxas: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["FRETES E TARIFAS"])),
+            baseIcms: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["BASE ICMS"])),
+            parcelaPaga: parseInt(String(ExcelParser.getCellValue(item, ["PARCELA PAGA"]))) || 1,
+            parcelas: parseInt(String(ExcelParser.getCellValue(item, ["PARCELAS"]))) || 1,
           }));
           setPaymentPreviewData(mapped);
           setPaymentModalOpen(true);
         } else if (importType === "reembolso") {
           const mapped = rawData.map((item: any) => ({
-            nota: String(getVal(item, ["NOTA", "NF"]) || "???").trim(),
-            parcelaPaga: parseInt(String(getVal(item, ["PARCELA PAGA"]))) || 1,
-            parcelas: parseInt(String(getVal(item, ["PARCELAS"]))) || 1,
-            repasse: parseNum(getVal(item, ["REPASSE"])),
-            comissaoVenda: parseNum(
-              getVal(item, ["COMISSAO VENDA", "COMISSÃO VENDA"]),
-            ),
-            comissaoFrete: parseNum(
-              getVal(item, ["COMISSAO FRETE", "COMISSÃO FRETE"]),
-            ),
-            baseIcms: parseNum(getVal(item, ["BASE ICMS"])),
-            loja: String(getVal(item, ["LOJA"]) || "DESCONHECIDA").trim(),
+            nota: String(ExcelParser.getCellValue(item, ["NOTA", "NF"]) || "???").trim(),
+            parcelaPaga: parseInt(String(ExcelParser.getCellValue(item, ["PARCELA PAGA"]))) || 1,
+            parcelas: parseInt(String(ExcelParser.getCellValue(item, ["PARCELAS"]))) || 1,
+            repasse: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["REPASSE"])),
+            comissaoVenda: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSAO VENDA", "COMISSÃO VENDA"])),
+            comissaoFrete: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSAO FRETE", "COMISSÃO FRETE"])),
+            baseIcms: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["BASE ICMS"])),
+            loja: String(ExcelParser.getCellValue(item, ["LOJA"]) || "DESCONHECIDA").trim(),
           }));
           setOperationPreviewData(mapped);
           setOperationModalOpen(true);
         } else if (importType === "devolucao") {
           const mapped = rawData.map((item: any) => ({
-            nf: String(getVal(item, ["NF", "NOTA"]) || "???").trim(),
-            baseIcms: parseNum(getVal(item, ["BASE", "BASE ICMS"])),
-            devolucao: String(getVal(item, ["DEVOLUCAO", "DEVOLUÇÃO"]) || ""),
-            valor: parseNum(getVal(item, ["VALOR"])),
-            saldo: parseNum(getVal(item, ["SALDO"])),
-            tratativa: String(getVal(item, ["TRATATIVA"]) || ""),
-            motivo: String(getVal(item, ["MOTIVO"]) || ""),
-            loja: String(getVal(item, ["LOJA"]) || "DESCONHECIDA").trim(),
+            nf: String(ExcelParser.getCellValue(item, ["NF", "NOTA"]) || "???").trim(),
+            baseIcms: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["BASE", "BASE ICMS"])),
+            devolucao: String(ExcelParser.getCellValue(item, ["DEVOLUCAO", "DEVOLUÇÃO"]) || ""),
+            valor: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["VALOR"])),
+            saldo: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["SALDO"])),
+            tratativa: String(ExcelParser.getCellValue(item, ["TRATATIVA"]) || ""),
+            motivo: String(ExcelParser.getCellValue(item, ["MOTIVO"]) || ""),
+            loja: String(ExcelParser.getCellValue(item, ["LOJA"]) || "DESCONHECIDA").trim(),
           }));
           setOperationPreviewData(mapped);
           setOperationModalOpen(true);
@@ -408,17 +331,7 @@ const Vendas = () => {
       }));
 
       const worksheet = XLSX.utils.json_to_sheet(worksheetData);
-      const columnWidths = [
-        { wch: 15 },
-        { wch: 12 },
-        { wch: 20 },
-        { wch: 20 },
-        { wch: 15 },
-        { wch: 18 },
-        { wch: 15 },
-        { wch: 15 },
-      ];
-      worksheet["!cols"] = columnWidths;
+      worksheet["!cols"] = [{ wch: 15 }, { wch: 12 }, { wch: 20 }, { wch: 20 }, { wch: 15 }, { wch: 18 }, { wch: 15 }, { wch: 15 }];
 
       const workbook = XLSX.utils.book_new();
       XLSX.utils.book_append_sheet(workbook, worksheet, "Vendas");
@@ -461,8 +374,23 @@ const Vendas = () => {
       }),
   );
 
+  const totalPages = Math.ceil(totalItems / itemsPerPage);
+
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxButtons = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages, startPage + maxButtons - 1);
+    if (endPage - startPage + 1 < maxButtons)
+      startPage = Math.max(1, endPage - maxButtons + 1);
+    for (let i = startPage; i <= endPage; i++) {
+      if (i >= 1) pages.push(i);
+    }
+    return pages;
+  };
+
   return (
-    <AppLayout title="Gestão de Vendas">
+    <AppLayout title="Gerenciamento de Vendas">
       <div className="space-y-6">
         <VendasHeader
           search={search}
@@ -475,6 +403,7 @@ const Vendas = () => {
           onStartDateChange={setStartDate}
           endDate={endDate}
           onEndDateChange={setEndDate}
+          isSearching={loading && search.length > 0}
           onClearFilters={() => {
             setSearch("");
             setMarketplaceFilter("all");
@@ -504,27 +433,32 @@ const Vendas = () => {
           freteETaxas={summary?.fretesETarifas || 0}
         />
 
-        <div className="bg-white border rounded-xl shadow-sm overflow-hidden min-h-[400px] flex flex-col">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           {loading ? (
-            <div className="flex-1 flex justify-center items-center">
-              <Loader2 className="animate-spin text-primary w-8 h-8" />
+            <div className="py-24 flex flex-col justify-center items-center gap-3">
+              <Loader2 className="animate-spin text-slate-900 w-10 h-10" />
+              <p className="text-slate-500 font-medium animate-pulse">Sincronizando dados...</p>
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-auto">
-                <DataTable data={filteredVendas} columns={columns} />
-              </div>
-              <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50">
-                <span className="text-sm text-slate-500 font-medium">
-                  {totalItems} registros no total
+              <DataTable
+                data={vendas}
+                columns={columns}
+                emptyMessage={search ? "Nenhuma venda encontrada para esta busca." : "Nenhum dado registrado no período."}
+              />
+
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <span className="text-sm text-slate-500 font-medium italic">
+                  {totalItems.toLocaleString('pt-BR')} registros no total
                 </span>
+
                 <div className="flex items-center gap-1">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(1)}
                     disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronsLeft className="w-4 h-4" />
                   </Button>
@@ -533,10 +467,11 @@ const Vendas = () => {
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
+
                   <div className="flex gap-1 mx-2">
                     {getPageNumbers().map((num) => (
                       <Button
@@ -544,20 +479,22 @@ const Vendas = () => {
                         variant={currentPage === num ? "default" : "outline"}
                         size="sm"
                         onClick={() => setCurrentPage(num)}
-                        className={`h-8 w-8 p-0 text-xs ${currentPage === num ? "bg-slate-900 text-white" : ""}`}
+                        className={`h-8 w-8 p-0 text-xs font-semibold transition-all ${currentPage === num
+                            ? "bg-slate-900 text-white border-slate-900 shadow-md scale-110"
+                            : "border-slate-200 text-slate-600 hover:bg-white"
+                          }`}
                       >
                         {num}
                       </Button>
                     ))}
                   </div>
+
                   <Button
                     variant="outline"
                     size="sm"
-                    onClick={() =>
-                      setCurrentPage((p) => Math.min(totalPages, p + 1))
-                    }
-                    disabled={currentPage >= totalPages}
-                    className="h-8 w-8 p-0"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage >= totalPages || totalPages === 0}
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -566,7 +503,7 @@ const Vendas = () => {
                     size="sm"
                     onClick={() => setCurrentPage(totalPages)}
                     disabled={currentPage >= totalPages || totalPages === 0}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronsRight className="w-4 h-4" />
                   </Button>

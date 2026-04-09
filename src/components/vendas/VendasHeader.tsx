@@ -9,6 +9,7 @@ import {
   Calendar as CalendarIcon,
   Filter,
   Check,
+  Loader2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ interface VendasHeaderProps {
   onEndDateChange: (value: string) => void;
   onClearFilters: () => void;
   onManualClick: () => void;
+  isSearching?: boolean;
   onImportClick: (
     type: "venda" | "pagamento" | "reembolso" | "devolucao",
   ) => void;
@@ -90,6 +92,7 @@ export const VendasHeader = ({
   onEndDateChange,
   onClearFilters,
   onManualClick,
+  isSearching,
   onImportClick,
 }: VendasHeaderProps) => {
   const startInputRef = useRef<HTMLInputElement>(null);
@@ -190,7 +193,13 @@ export const VendasHeader = ({
 
       <div className="bg-white p-3 rounded-xl border shadow-sm flex flex-col lg:flex-row gap-3 items-center">
         <div className="relative flex-1 w-full font-medium">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+          <div className="absolute left-3 top-1/2 -translate-y-1/2 flex items-center justify-center w-4 h-4 pointer-events-none">
+            {isSearching ? (
+              <Loader2 className="w-full h-full text-slate-400 animate-spin" />
+            ) : (
+              <Search className="w-full h-full text-slate-400" />
+            )}
+          </div>
           <Input
             placeholder="Buscar por NF, Loja..."
             value={search}
@@ -272,7 +281,6 @@ export const VendasHeader = ({
         </Select>
 
         <div className="flex items-center gap-2 w-full lg:w-auto">
-          {/* Campo Data Início */}
           <div
             onClick={() => startInputRef.current?.showPicker()}
             className="relative group lg:w-[145px] w-full h-9 flex items-center bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
@@ -292,7 +300,6 @@ export const VendasHeader = ({
 
           <span className="text-slate-300 font-bold">/</span>
 
-          {/* Campo Data Fim */}
           <div
             onClick={() => endInputRef.current?.showPicker()}
             className="relative group lg:w-[145px] w-full h-9 flex items-center bg-slate-50 border border-slate-200 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"

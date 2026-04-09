@@ -9,10 +9,9 @@ import {
 import { cn } from "@/lib/utils";
 import React from "react";
 
-// Alteramos o tipo do header para aceitar Node (strings, elementos ou funções)
 interface Column<T> {
   key: string;
-  header: React.ReactNode | (() => React.ReactNode); 
+  header: React.ReactNode | (() => React.ReactNode);
   render?: (item: T) => React.ReactNode;
   className?: string;
 }
@@ -28,47 +27,55 @@ export function DataTable<T extends { id: string }>({
   columns,
   emptyMessage = "Nenhum dado encontrado",
 }: DataTableProps<T>) {
-  if (data.length === 0) {
-    return (
-      <div className="flex items-center justify-center py-12 text-muted-foreground">
-        {emptyMessage}
-      </div>
-    );
-  }
-
   return (
-    <div className="rounded-xl border overflow-hidden">
+    <div className="rounded-xl border border-slate-200 overflow-hidden bg-white">
       <Table>
         <TableHeader>
-          <TableRow className="bg-muted/50 hover:bg-muted/50">
+          <TableRow className="bg-slate-50/50 hover:bg-slate-50/50 border-b border-slate-200">
             {columns.map((column) => (
               <TableHead
                 key={column.key}
-                className={cn("font-semibold text-foreground", column.className)}
+                className={cn(
+                  "h-12 px-4 text-left align-middle font-bold text-slate-900",
+                  column.className
+                )}
               >
-                {/* Lógica para renderizar se for função ou valor direto */}
-                {typeof column.header === "function" 
-                  ? column.header() 
+                {typeof column.header === "function"
+                  ? (column.header as Function)()
                   : column.header}
               </TableHead>
             ))}
           </TableRow>
         </TableHeader>
         <TableBody>
-          {data.map((item) => (
-            <TableRow
-              key={item.id}
-              className="hover:bg-muted/30 transition-colors"
-            >
-              {columns.map((column) => (
-                <TableCell key={column.key} className={column.className}>
-                  {column.render
-                    ? column.render(item)
-                    : (item as Record<string, unknown>)[column.key] as React.ReactNode}
-                </TableCell>
-              ))}
+          {data.length > 0 ? (
+            data.map((item) => (
+              <TableRow
+                key={item.id}
+                className="hover:bg-slate-50/50 transition-colors border-b border-slate-100 last:border-0"
+              >
+                {columns.map((column) => (
+                  <TableCell
+                    key={column.key}
+                    className={cn("p-4 align-middle", column.className)}
+                  >
+                    {column.render
+                      ? column.render(item)
+                      : (item as any)[column.key]}
+                  </TableCell>
+                ))}
+              </TableRow>
+            ))
+          ) : (
+            <TableRow>
+              <TableCell
+                colSpan={columns.length}
+                className="h-32 text-center text-slate-500 font-medium"
+              >
+                {emptyMessage}
+              </TableCell>
             </TableRow>
-          ))}
+          )}
         </TableBody>
       </Table>
     </div>

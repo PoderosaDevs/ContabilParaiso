@@ -1,6 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { toast } from "sonner";
-import * as XLSX from "xlsx";
 import {
   Loader2,
   ChevronLeft,
@@ -13,8 +12,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { DataTable } from "@/components/ui/data-table";
 import { Button } from "@/components/ui/button";
 
-
-
 import {
   transferenciaService,
   marketplaceService,
@@ -25,18 +22,6 @@ import { getDevolucoesColumns } from "@/components/devolucoes/columns";
 import { DevolucoesHeader } from "@/components/devolucoes/DevolucoesHeader";
 import { DevolucoesStats } from "@/components/devolucoes/DevolucoesStats";
 
-export interface DevolucaoImport {
-  nf: string;
-  base: number;
-  devolucao: string;
-  valor: number;
-  saldo: number;
-  tratativa: string;
-  motivo: string;
-  loja: string;
-  marketplaceId?: string | null;
-}
-
 const Devolucoes = () => {
   const [devolucoes, setDevolucoes] = useState<Devolucao[]>([]);
   const [marketplaces, setMarketplaces] = useState<Marketplace[]>([]);
@@ -45,16 +30,15 @@ const Devolucoes = () => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [search, setSearch] = useState("");
   const [marketplaceFilter, setMarketplaceFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<string[]>([]);
+  const [startDate, setStartDate] = useState("");
+  const [endDate, setEndDate] = useState("");
+  
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 20;
 
-
   const [modalOpen, setModalOpen] = useState(false);
   const [editingDevolucao, setEditingDevolucao] = useState<Devolucao | null>(null);
-
-  const [statusFilter, setStatusFilter] = useState("all");
-  const [startDate, setStartDate] = useState("");
-  const [endDate, setEndDate] = useState("");
 
   const fetchData = async () => {
     try {
@@ -87,7 +71,7 @@ const Devolucoes = () => {
         marketplaceFilter === "all" || d.venda?.marketplaceId === marketplaceFilter;
       
       const matchesStatus = 
-        statusFilter === "all" || d.venda?.status === statusFilter;
+        statusFilter.length === 0 || (d.venda?.status && statusFilter.includes(d.venda.status));
 
       let matchesDate = true;
       if (startDate || endDate) {
@@ -122,6 +106,7 @@ const Devolucoes = () => {
   }, [filteredDevolucoes]);
 
   const totalPages = Math.ceil(filteredDevolucoes.length / itemsPerPage);
+  
   const paginatedDevolucoes = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
     return filteredDevolucoes.slice(start, start + itemsPerPage);
@@ -144,17 +129,6 @@ const Devolucoes = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [search, marketplaceFilter, statusFilter, startDate, endDate]);
-
-  const handleTriggerImport = () => {
-    setTimeout(() => {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = "";
-        fileInputRef.current.click();
-      }
-    }, 0);
-  };
-
-
 
   const handleEdit = (item: Devolucao) => {
     setEditingDevolucao(item);
@@ -191,19 +165,13 @@ const Devolucoes = () => {
           onClearFilters={() => {
             setSearch("");
             setMarketplaceFilter("all");
-            setStatusFilter("all");
+            setStatusFilter([]);
             setStartDate("");
             setEndDate("");
           }}
           marketplaces={marketplaces}
-          onManualClick={() => {
-            setEditingDevolucao(null);
-            setModalOpen(true);
-          }}
-          onImportClick={handleTriggerImport}
+          onExportClick={() => {}}
         />
-
-   
 
         <DevolucoesStats
           count={stats.count}
@@ -212,28 +180,32 @@ const Devolucoes = () => {
           totalSaldo={stats.totalSaldo}
         />
 
-        <div className="bg-white border rounded-xl shadow-sm overflow-hidden min-h-[400px] flex flex-col">
+        <div className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
           {loading ? (
-            <div className="flex-1 flex justify-center items-center">
-              <Loader2 className="animate-spin text-primary w-8 h-8" />
+            <div className="py-24 flex flex-col justify-center items-center gap-3">
+              <Loader2 className="animate-spin text-slate-900 w-10 h-10" />
+              <p className="text-slate-500 font-medium animate-pulse">Buscando devoluções...</p>
             </div>
           ) : (
             <>
-              <div className="flex-1 overflow-auto">
-                <DataTable data={paginatedDevolucoes} columns={columns} />
-              </div>
+              <DataTable 
+                data={paginatedDevolucoes} 
+                columns={columns} 
+                emptyMessage={search ? "Nenhuma devolução encontrada." : "Nenhum dado registrado."}
+              />
               
-              <div className="flex items-center justify-between px-6 py-4 border-t bg-slate-50">
-                <span className="text-sm text-slate-500 font-medium">
-                  {filteredDevolucoes.length} registros no total
+              <div className="flex items-center justify-between px-6 py-4 border-t border-slate-100 bg-slate-50/50">
+                <span className="text-sm text-slate-500 font-medium italic">
+                  {filteredDevolucoes.length.toLocaleString('pt-BR')} registros no total
                 </span>
+                
                 <div className="flex items-center gap-1">
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage(1)}
                     disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronsLeft className="w-4 h-4" />
                   </Button>
@@ -242,10 +214,11 @@ const Devolucoes = () => {
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
                     disabled={currentPage === 1}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronLeft className="w-4 h-4" />
                   </Button>
+                  
                   <div className="flex gap-1 mx-2">
                     {getPageNumbers().map((num) => (
                       <Button
@@ -253,18 +226,23 @@ const Devolucoes = () => {
                         variant={currentPage === num ? "default" : "outline"}
                         size="sm"
                         onClick={() => setCurrentPage(num)}
-                        className={`h-8 w-8 p-0 text-xs ${currentPage === num ? "bg-slate-900 text-white" : ""}`}
+                        className={`h-8 w-8 p-0 text-xs font-semibold transition-all ${
+                          currentPage === num 
+                            ? "bg-slate-900 text-white border-slate-900 shadow-md scale-110" 
+                            : "border-slate-200 text-slate-600 hover:bg-white"
+                        }`}
                       >
                         {num}
                       </Button>
                     ))}
                   </div>
+
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage >= totalPages}
-                    className="h-8 w-8 p-0"
+                    disabled={currentPage >= totalPages || totalPages === 0}
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronRight className="w-4 h-4" />
                   </Button>
@@ -273,7 +251,7 @@ const Devolucoes = () => {
                     size="sm"
                     onClick={() => setCurrentPage(totalPages)}
                     disabled={currentPage >= totalPages || totalPages === 0}
-                    className="h-8 w-8 p-0"
+                    className="h-8 w-8 p-0 border-slate-200 text-slate-600 hover:bg-white"
                   >
                     <ChevronsRight className="w-4 h-4" />
                   </Button>
@@ -283,8 +261,6 @@ const Devolucoes = () => {
           )}
         </div>
       </div>
-
-
     </AppLayout>
   );
 };
