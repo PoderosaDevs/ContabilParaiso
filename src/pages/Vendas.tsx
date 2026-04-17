@@ -137,6 +137,7 @@ const Vendas = () => {
 
   useEffect(() => {
     setCurrentPage(1);
+    
   }, [activeParams]);
 
   const handleTriggerImport = (

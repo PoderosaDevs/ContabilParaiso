@@ -110,23 +110,33 @@ export const getVendasColumns = (
     header: () => <div className="text-center w-full">Fluxo de Caixa</div>,
     render: (v: Venda) => {
       const baseIcms = Number(v.baseIcms || 0);
-      const taxas = Number(v.comissaoVenda || 0) + Number(v.comissaoFrete || 0);
+      const isParcelado = (v.qtdParcelas || 1) > 1;
+
+      // Somas das parcelas
+      const somaLiquidaPagamentos = v.pagamentos?.reduce((acc, p) => acc + Number(p.valor || 0), 0) || 0;
+      const somaTaxasPagamentos = v.pagamentos?.reduce((acc, p) => acc + Number(p.comissaoRetida || 0), 0) || 0;
+
+      // Definição do Recebido: No parcelado é a soma do repasse bruto (valor + taxas)
+      const recebidoTotal = isParcelado 
+        ? (somaLiquidaPagamentos + somaTaxasPagamentos)
+        : somaLiquidaPagamentos;
+
+      // Definição do Líquido: No parcelado é o que caiu na conta (soma dos valores das parcelas)
+      const liquidoExibicao = isParcelado
+        ? somaLiquidaPagamentos
+        : (v.liquidoReceber ? Number(v.liquidoReceber) : baseIcms - (Number(v.comissaoVenda || 0) + Number(v.comissaoFrete || 0)));
+
+      // Taxas para o gráfico/lista
+      const taxasExibicao = isParcelado 
+        ? somaTaxasPagamentos 
+        : (Number(v.comissaoVenda || 0) + Number(v.comissaoFrete || 0));
+
       const frete_taxas = Number(v.frete_e_taxas || 0);
-      const liquido = v.liquidoReceber
-        ? Number(v.liquidoReceber)
-        : baseIcms - taxas - frete_taxas;
+      const totalReembolsos = v.reembolsos?.reduce((acc, r) => acc + Number(r.valor || 0), 0) || 0;
+      const totalDevolucoes = v.devolucoes?.reduce((acc, d) => acc + Number(d.valor || 0), 0) || 0;
 
-      const totalPagos =
-        v.pagamentos?.reduce((acc, p) => acc + Number(p.valor || 0), 0) || 0;
-      const totalReembolsos =
-        v.reembolsos?.reduce((acc, r) => acc + Number(r.valor || 0), 0) || 0;
-      const totalDevolucoes =
-        v.devolucoes?.reduce((acc, d) => acc + Number(d.valor || 0), 0) || 0;
-
-      const recebidoTotal = totalPagos + totalReembolsos + totalDevolucoes;
-      const isEstorno =
-        v.status.includes("REEMBOLSADO") || v.status.includes("DEVOLVIDO");
-      const isPagoCorretamente = recebidoTotal >= baseIcms && baseIcms > 0;
+      const isEstorno = v.status.includes("REEMBOLSADO") || v.status.includes("DEVOLVIDO");
+      const isPagoCorretamente = Math.abs((recebidoTotal + (isParcelado ? 0 : taxasExibicao) + frete_taxas) - baseIcms) < 0.5 && baseIcms > 0;
 
       return (
         <div className="flex flex-col items-center justify-center gap-1.5 w-full min-w-[160px]">
@@ -137,17 +147,17 @@ export const getVendasColumns = (
                   <Target className="w-3 h-3" /> Líquido
                 </span>
                 <span className="text-xs font-bold text-blue-700">
-                  {formatCurrency(liquido)}
+                  {formatCurrency(liquidoExibicao)}
                 </span>
               </div>
 
-              {taxas > 0 && (
+              {taxasExibicao > 0 && (
                 <div className="flex items-center justify-between w-full max-w-[150px] px-2 text-slate-400">
                   <span className="text-[9px] font-medium flex items-center gap-1">
                     <PieChart className="w-3 h-3 text-red-400" /> Taxas
                   </span>
                   <span className="text-[10px] font-medium text-red-500">
-                    -{formatCurrency(taxas)}
+                    -{formatCurrency(taxasExibicao)}
                   </span>
                 </div>
               )}
