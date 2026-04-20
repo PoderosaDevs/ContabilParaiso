@@ -137,7 +137,7 @@ const Vendas = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-    
+
   }, [activeParams]);
 
   const handleTriggerImport = (
@@ -181,8 +181,8 @@ const Vendas = () => {
             nota: String(ExcelParser.getCellValue(item, ["NOTA", "NF"]) || "???").trim(),
             loja: String(ExcelParser.getCellValue(item, ["LOJA", "CLIENTE"]) || "DESCONHECIDA").trim(),
             repasse: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["REPASSE", "VALOR", "LIQUIDO"])),
-            comissaoVenda: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSÃO VENDA"])),
-            comissaoFrete: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSÃO FRETE"])),
+            comissaoVenda: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSAO VENDA", "COMISSÃO VENDA"])),
+            comissaoFrete: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["COMISSAO FRETE", "COMISSÃO FRETE"])),
             frete_e_taxas: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["FRETES E TARIFAS"])),
             baseIcms: ExcelParser.parseCurrency(ExcelParser.getCellValue(item, ["BASE ICMS"])),
             parcelaPaga: parseInt(String(ExcelParser.getCellValue(item, ["PARCELA PAGA"]))) || 1,
@@ -481,8 +481,8 @@ const Vendas = () => {
                         size="sm"
                         onClick={() => setCurrentPage(num)}
                         className={`h-8 w-8 p-0 text-xs font-semibold transition-all ${currentPage === num
-                            ? "bg-slate-900 text-white border-slate-900 shadow-md scale-110"
-                            : "border-slate-200 text-slate-600 hover:bg-white"
+                          ? "bg-slate-900 text-white border-slate-900 shadow-md scale-110"
+                          : "border-slate-200 text-slate-600 hover:bg-white"
                           }`}
                       >
                         {num}
