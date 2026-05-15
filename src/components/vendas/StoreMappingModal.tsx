@@ -1,7 +1,7 @@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Store } from "lucide-react";
+import { Store, Loader2 } from "lucide-react";
 import { useEffect, useState } from "react";
 
 interface StoreMapping {
@@ -13,16 +13,15 @@ interface StoreMappingModalProps {
   open: boolean;
   uniqueStores: string[];
   marketplaces: any[];
+  loading?: boolean;
   onConfirm: (mappings: StoreMapping[]) => void;
   onCancel: () => void;
 }
 
-export const StoreMappingModal = ({ open, uniqueStores, marketplaces, onConfirm, onCancel }: StoreMappingModalProps) => {
-  // Estado local para armazenar os vínculos temporários
+export const StoreMappingModal = ({ open, uniqueStores, marketplaces, loading = false, onConfirm, onCancel }: StoreMappingModalProps) => {
   const [mappings, setMappings] = useState<StoreMapping[]>([]);
 
   useEffect(() => {
-    // Inicializa os mappings com os nomes das lojas da planilha
     setMappings(uniqueStores.map(name => ({ storeName: name, marketplaceId: "" })));
   }, [uniqueStores]);
 
@@ -33,7 +32,7 @@ export const StoreMappingModal = ({ open, uniqueStores, marketplaces, onConfirm,
   const isComplete = mappings.every(m => m.marketplaceId !== "");
 
   return (
-    <Dialog open={open} onOpenChange={(val) => !val && onCancel()}>
+    <Dialog open={open} onOpenChange={(val) => !val && !loading && onCancel()}>
       <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Vincular Lojas aos Marketplaces</DialogTitle>
@@ -50,7 +49,7 @@ export const StoreMappingModal = ({ open, uniqueStores, marketplaces, onConfirm,
                 <span className="text-sm font-medium truncate">{mapping.storeName}</span>
               </div>
               
-              <Select onValueChange={(val) => updateMapping(mapping.storeName, val)}>
+              <Select disabled={loading} onValueChange={(val) => updateMapping(mapping.storeName, val)}>
                 <SelectTrigger className="w-[200px]">
                   <SelectValue placeholder="Selecionar canal..." />
                 </SelectTrigger>
@@ -65,12 +64,13 @@ export const StoreMappingModal = ({ open, uniqueStores, marketplaces, onConfirm,
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={onCancel}>Voltar</Button>
+          <Button variant="outline" onClick={onCancel} disabled={loading}>Voltar</Button>
           <Button 
             onClick={() => onConfirm(mappings)} 
-            disabled={!isComplete}
+            disabled={!isComplete || loading}
             className="gradient-primary text-white"
           >
+            {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             Finalizar Importação
           </Button>
         </DialogFooter>

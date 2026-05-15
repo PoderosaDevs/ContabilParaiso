@@ -591,6 +591,7 @@ const Vendas = () => {
         open={mappingModalOpen}
         uniqueStores={uniqueStores}
         marketplaces={marketplaces}
+        loading={isConfirmingImport}
         onConfirm={handleMappingConfirm}
         onCancel={handleMappingCancel}
       />
